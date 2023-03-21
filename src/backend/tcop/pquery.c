@@ -916,6 +916,7 @@ PortalRunSelect(Portal portal,
 		else
 		{
 			PushActiveSnapshot(queryDesc->snapshot);
+			// NoteCN: 这个函数负责执行查询计划。它会遍历查询计划并执行相应的操作。
 			ExecutorRun(queryDesc, direction, (uint64) count,
 						portal->run_once);
 			nprocessed = queryDesc->estate->es_processed;

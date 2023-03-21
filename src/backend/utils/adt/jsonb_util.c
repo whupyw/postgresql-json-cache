@@ -435,7 +435,7 @@ getKeyJsonValueFromContainer(JsonbContainer *container,
 		if (difference == 0)
 		{
 			/* Found our key, return corresponding value */
-			int			index = stopMiddle + count;
+			int			index = stopMiddle + count; // 排列: k k v v
 
 			if (!res)
 				res = palloc(sizeof(JsonbValue));

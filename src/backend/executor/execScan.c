@@ -159,9 +159,9 @@ ExecScan(ScanState *node,
 		 ExecScanAccessMtd accessMtd,	/* function returning a tuple */
 		 ExecScanRecheckMtd recheckMtd)
 {
-	ExprContext *econtext;
-	ExprState  *qual;
-	ProjectionInfo *projInfo;
+	ExprContext *econtext; // 上下文
+	ExprState  *qual; // 扫描条件表达式
+	ProjectionInfo *projInfo; // 投影信息
 
 	/*
 	 * Fetch data from node
@@ -224,7 +224,7 @@ ExecScan(ScanState *node,
 		 * when the qual is null ... saves only a few cycles, but they add up
 		 * ...
 		 */
-		if (qual == NULL || ExecQual(qual, econtext))
+		if (qual == NULL || ExecQual(qual, econtext)) // 符合筛选规则
 		{
 			/*
 			 * Found a satisfactory scan tuple.

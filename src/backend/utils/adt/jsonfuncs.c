@@ -502,7 +502,7 @@ pg_parse_json_or_ereport(JsonLexContext *lex, JsonSemAction *sem)
 {
 	JsonParseErrorType result;
 
-	result = pg_parse_json(lex, sem);
+	result = pg_parse_json(lex, sem); // todo:yyh 实际的解析工作执行位置
 	if (result != JSON_SUCCESS)
 		json_ereport_error(result, lex);
 }
@@ -806,7 +806,7 @@ json_object_field(PG_FUNCTION_ARGS)
 	text	   *fname = PG_GETARG_TEXT_PP(1);
 	char	   *fnamestr = text_to_cstring(fname);
 	text	   *result;
-
+    // note:yyh 在 get_worker 内 parse
 	result = get_worker(json, &fnamestr, NULL, 1, false);
 
 	if (result != NULL)
@@ -830,7 +830,7 @@ jsonb_object_field(PG_FUNCTION_ARGS)
 									 VARDATA_ANY(key),
 									 VARSIZE_ANY_EXHDR(key),
 									 &vbuf);
-
+    // note:yyh We get 'v' as our result
 	if (v != NULL)
 		PG_RETURN_JSONB_P(JsonbValueToJsonb(v));
 
@@ -1063,10 +1063,10 @@ get_worker(text *json,
 		   int *ipath,
 		   int npath,
 		   bool normalize_results)
-{
-	JsonLexContext *lex = makeJsonLexContext(json, true);
-	JsonSemAction *sem = palloc0(sizeof(JsonSemAction));
-	GetState   *state = palloc0(sizeof(GetState));
+{   // todo:yyh 在这里取消解析
+	JsonLexContext *lex = makeJsonLexContext(json, true); // 生成json文本的词法上下文，指定为对标准json文本进行解析。
+	JsonSemAction *sem = palloc0(sizeof(JsonSemAction)); // 动态分配一块内存，用于存储json的语义操作信息。
+	GetState   *state = palloc0(sizeof(GetState)); // 动态分配一块内存，用于存储json解析的相关状态。
 
 	Assert(npath >= 0);
 
@@ -1088,15 +1088,15 @@ get_worker(text *json,
 	 * Not all variants need all the semantic routines. Only set the ones that
 	 * are actually needed for maximum efficiency.
 	 */
-	sem->scalar = get_scalar;
-	if (npath == 0)
+	sem->scalar = get_scalar; // 处理标量值的过程函数
+	if (npath == 0) // 处理标量值
 	{
 		sem->object_start = get_object_start;
 		sem->object_end = get_object_end;
 		sem->array_start = get_array_start;
 		sem->array_end = get_array_end;
 	}
-	if (tpath != NULL)
+	if (tpath != NULL) // 处理JSON Object
 	{
 		sem->object_field_start = get_object_field_start;
 		sem->object_field_end = get_object_field_end;
@@ -1108,7 +1108,7 @@ get_worker(text *json,
 		sem->array_element_end = get_array_element_end;
 	}
 
-	pg_parse_json_or_ereport(lex, sem);
+	pg_parse_json_or_ereport(lex, sem); // 很消耗资源的一个函数
 
 	return state->tresult;
 }

@@ -177,12 +177,12 @@ makeJsonLexContextCstringLen(char *json, int len, int encoding, bool need_escape
  */
 JsonParseErrorType
 pg_parse_json(JsonLexContext *lex, JsonSemAction *sem)
-{
+{   // todo:yyh 在此处进行JSON解析
 	JsonTokenType tok;
 	JsonParseErrorType result;
 
 	/* get the initial token */
-	result = json_lex(lex);
+	result = json_lex(lex); // 此函数设置解析到的 Token 的类型，放置在 lex->token_type 中
 	if (result != JSON_SUCCESS)
 		return result;
 
@@ -190,7 +190,7 @@ pg_parse_json(JsonLexContext *lex, JsonSemAction *sem)
 
 	/* parse by recursive descent */
 	switch (tok)
-	{
+	{   // 此处根据token的类型(开头的字符), 选择不同的解析方法
 		case JSON_TOKEN_OBJECT_START:
 			result = parse_object(lex, sem);
 			break;
@@ -345,7 +345,7 @@ parse_object_field(JsonLexContext *lex, JsonSemAction *sem)
 	isnull = tok == JSON_TOKEN_NULL;
 
 	if (ostart != NULL)
-		(*ostart) (sem->semstate, fname, isnull);
+		(*ostart) (sem->semstate, fname, isnull); // note:yyh 设置 state->result_start
 
 	switch (tok)
 	{
@@ -402,7 +402,7 @@ parse_object(JsonLexContext *lex, JsonSemAction *sem)
 		case JSON_TOKEN_STRING:
 			result = parse_object_field(lex, sem);
 			while (result == JSON_SUCCESS && lex_peek(lex) == JSON_TOKEN_COMMA)
-			{
+			{   // {"aa": 12, "ad": 21, "az": 12} 会把括号内的都解析完毕
 				result = json_lex(lex);
 				if (result != JSON_SUCCESS)
 					break;
@@ -524,7 +524,7 @@ parse_array(JsonLexContext *lex, JsonSemAction *sem)
  */
 JsonParseErrorType
 json_lex(JsonLexContext *lex)
-{
+{   // 此函数输出解析到的 Token 的类型，放置在 lex->token_type 中
 	char	   *s;
 	int			len;
 	JsonParseErrorType result;
@@ -544,7 +544,7 @@ json_lex(JsonLexContext *lex)
 	}
 	lex->token_start = s;
 
-	/* Determine token type. */
+	/* Determine token type. 到了JSON最后一个字符了*/
 	if (len >= lex->input_length)
 	{
 		lex->token_start = NULL;

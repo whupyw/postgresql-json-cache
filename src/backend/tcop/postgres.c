@@ -1006,6 +1006,7 @@ exec_simple_query(const char *query_string)
 	 * Do basic parsing of the query or queries (this should be safe even if
 	 * we are in aborted transaction state!)
 	 */
+    // NoteCN: 这个函数负责将查询字符串解析成一个查询树列表。这一步将查询从文本形式转换为内部表示形式。
 	parsetree_list = pg_parse_query(query_string);
 
 	/* Log immediately if dictated by log_statement */

@@ -1007,7 +1007,7 @@ slot_deform_heap_tuple(TupleTableSlot *slot, HeapTuple tuple, uint32 *offp,
 		off = att_addlength_pointer(off, thisatt->attlen, tp + off);
 
 		if (thisatt->attlen <= 0)
-			slow = true;		/* can't use attcacheoff anymore */
+			slow = true;		/* can't use attcacheoff anymore, 因为attlen == -1 未可变长类型，只有固定长度类型的数据才能被cache */
 	}
 
 	/*
