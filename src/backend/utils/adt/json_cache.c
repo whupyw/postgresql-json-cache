@@ -1,24 +1,13 @@
-#include "postgres.h"
+/*-------------------------------------------------------------------------
+ *
+ * json_cache.c
+ *	  Implementations of functions for caching json data.
+ *
+ * Copyright (c) 2023, Yuhan Yuan, Wuhan University
+ * All rights reserved.
+ *
+ * src/backend/utils/adt/json_cache.c
+ *
+ *-------------------------------------------------------------------------
+ */
 
-#include <limits.h>
-
-#include "access/htup_details.h"
-#include "catalog/pg_type.h"
-#include "common/jsonapi.h"
-#include "common/string.h"
-#include "fmgr.h"
-#include "funcapi.h"
-#include "lib/stringinfo.h"
-#include "mb/pg_wchar.h"
-#include "miscadmin.h"
-#include "utils/array.h"
-#include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/hsearch.h"
-#include "utils/json.h"
-#include "utils/jsonb.h"
-#include "utils/jsonfuncs.h"
-#include "utils/lsyscache.h"
-#include "utils/memutils.h"
-#include "utils/syscache.h"
-#include "utils/typcache.h"

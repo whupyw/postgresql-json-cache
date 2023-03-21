@@ -1,11 +1,12 @@
 /*-------------------------------------------------------------------------
  *
- * json_cache.h
- *	  Declarations for cache structs for json data.
+ * jsonb_cache.h
+ *	  Declarations of structs and functions for caching jsonb data.
  *
- * Copyright 2023, Yuan Yuhan
+ * Copyright (c) 2023, Yuhan Yuan, Wuhan University
+ * All rights reserved.
  *
- * src/include/utils/json_cache.h
+ * src/include/utils/jsonb_cache.h
  *
  *-------------------------------------------------------------------------
  */
@@ -14,6 +15,7 @@
 #define JSONB_CACHE_H
 
 #include "uthash.h"
+#include "../postgres.h"
 
 struct jsonb_cache {
 
