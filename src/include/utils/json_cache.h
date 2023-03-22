@@ -18,22 +18,22 @@
 #include "../postgres.h"
 
 struct json_data {
-    char *field_name; //
-    text *value;
+    char *field_name; // json 中的键
+    text *value; // 存储 text 地址
     UT_hash_handle hh; /* makes this structure hashable */
 };
 
 struct json_cache {
-    text *json;  // 唯一标识元组中的一个json数据
-    struct json_data *data;
+    text *json_addr;  // 唯一标识元组中的一个json数据
+    struct json_data *datas; // json_data 也是一个 map
     UT_hash_handle hh; /* makes this structure hashable */
 };
 
-void add_json_data(text *json, char *fnamestr, text *result);
+void add_json_data(text *json, char *fieldName, text *value);
 
-struct json_data *find_json_data(text *json, char *fnamestr);
+text *find_json_data(text *json, char *fieldName);
 
-void delete_json_data(text *json, char *fnamestr);
+void delete_json_data(text *json, char *fieldName);
 
 void delete_data_in_json(text *json);
 

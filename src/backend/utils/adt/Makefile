@@ -49,6 +49,7 @@ OBJS = \
 	json.o \
 	json_cache.o \
 	jsonb.o \
+	jsonb_cache.o \
 	jsonb_gin.o \
 	jsonb_op.o \
 	jsonb_util.o \

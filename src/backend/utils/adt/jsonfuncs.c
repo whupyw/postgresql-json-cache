@@ -14,6 +14,8 @@
 
 #include "postgres.h"
 
+#include "utils/json_cache.h"
+
 #include <limits.h>
 
 #include "access/htup_details.h"
@@ -806,8 +808,14 @@ json_object_field(PG_FUNCTION_ARGS)
 	text	   *fname = PG_GETARG_TEXT_PP(1);
 	char	   *fnamestr = text_to_cstring(fname);
 	text	   *result;
-    // note:yyh 在 get_worker 内 parse
-	result = get_worker(json, &fnamestr, NULL, 1, false);
+    // processing:yyh 查询是否已经缓存
+    result = find_json_data(json, fnamestr);
+    if (result == NULL) {
+        // note:yyh 在 get_worker 内 parse
+        result = get_worker(json, &fnamestr, NULL, 1, false);
+        // 加入缓存
+        add_json_data(json, fnamestr, result);
+    }
 
 	if (result != NULL)
 		PG_RETURN_TEXT_P(result);
