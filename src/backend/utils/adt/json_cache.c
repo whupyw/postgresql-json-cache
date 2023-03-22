@@ -25,7 +25,9 @@ void add_json_data(text *json, char *fieldName, text *value) {
 
     data->field_name = (char*)malloc(strlen(fieldName) + 1);
     strcpy(data->field_name, fieldName);
-    data->value = value;
+
+    data->value = (text*) malloc(sizeof(text) + VARSIZE(value) - VARHDRSZ);
+    memcpy(data->value, value, sizeof(text) + VARSIZE(value) - VARHDRSZ);
 
     // 查找map中是否已经存在此key
     HASH_FIND_PTR(jsonCache, &json, cache);
