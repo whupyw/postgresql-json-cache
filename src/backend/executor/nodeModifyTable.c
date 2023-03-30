@@ -52,6 +52,8 @@
 #include "utils/datum.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/json_cache_utils.h"
+#include "utils/json_cache.h"
 
 
 typedef struct MTTargetRelLookup
@@ -1684,7 +1686,7 @@ ExecUpdate(ModifyTableState *mtstate,
 	{
 		LockTupleMode lockmode;
 		bool		partition_constraint_failed;
-		bool		update_indexes;
+		bool		 update_indexes;
 
 		/*
 		 * Constraints and GENERATED expressions might reference the tableoid
@@ -1828,7 +1830,28 @@ lreplace:;
 				return NULL;
 
 			case TM_Ok:
-				break;
+            {
+                // note:yyh 更新JSON
+                int attno = resultRelInfo->ri_RowIdAttNo;
+                Oid attType = resultRelationDesc->rd_att->attrs[attno-1].atttypid;
+                Oid relid = slot->tts_tableOid;
+
+                PrimaryKeyInfo *keyAttnos; // 主键的列号数组
+                char *unique_key; // The key for the map of json cache
+
+                // 114: JSON
+                if (attType != 114) {
+                    break;
+                }
+                keyAttnos = get_primary_keys_att_no(relid);
+                unique_key = transform_primary_keys(relid, keyAttnos, slot);
+                if (unique_key != NULL) {
+                    delete_by_primary_key(unique_key);
+                }
+                free(keyAttnos);
+                pfree(unique_key);
+                break;
+            }
 
 			case TM_Updated:
 				{
@@ -2488,7 +2511,7 @@ ExecModifyTable(PlanState *pstate)
 			char		relkind;
 			Datum		datum;
 			bool		isNull;
-            // todo:yyh 执行更新语句
+            // note:yyh 执行更新语句
 			relkind = resultRelInfo->ri_RelationDesc->rd_rel->relkind;
 			if (relkind == RELKIND_RELATION ||
 				relkind == RELKIND_MATVIEW ||
@@ -2561,7 +2584,7 @@ ExecModifyTable(PlanState *pstate)
 				slot = ExecInsert(node, resultRelInfo, slot, planSlot,
 								  estate, node->canSetTag);
 				break;
-			case CMD_UPDATE:
+			case CMD_UPDATE: // note:yyh 这里？
 				/* Initialize projection info if first time for this table */
 				if (unlikely(!resultRelInfo->ri_projectNewInfoValid))
 					ExecInitUpdateProjection(node, resultRelInfo);
@@ -2596,13 +2619,29 @@ ExecModifyTable(PlanState *pstate)
 								  node->canSetTag);
 				break;
 			case CMD_DELETE:
-				slot = ExecDelete(node, resultRelInfo, tupleid, oldtuple,
-								  planSlot, &node->mt_epqstate, estate,
-								  true, /* processReturning */
-								  node->canSetTag,
-								  false,	/* changingPart */
-								  NULL, NULL);
-				break;
+            {
+                // note:yyh 删除JSON(整行)
+                Oid relid =  resultRelInfo->ri_RelationDesc->rd_id;
+                PrimaryKeyInfo *keyAttnos; // 主键的列号数组
+                char *unique_key; // The key for the map of json cache
+
+                keyAttnos = get_primary_keys_att_no(relid);
+                unique_key = transform_primary_keys(relid, keyAttnos, subplanstate->ps_ExprContext->ecxt_scantuple);
+
+                if (unique_key != NULL) {
+                    delete_by_primary_key(unique_key);
+                }
+                free(keyAttnos);
+                pfree(unique_key);
+
+                slot = ExecDelete(node, resultRelInfo, tupleid, oldtuple,
+                                  planSlot, &node->mt_epqstate, estate,
+                                  true, /* processReturning */
+                                  node->canSetTag,
+                                  false,	/* changingPart */
+                                  NULL, NULL);
+                break;
+            }
 			default:
 				elog(ERROR, "unknown operation");
 				break;

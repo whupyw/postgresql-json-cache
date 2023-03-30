@@ -832,11 +832,11 @@ json_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid 
 
     keyAttnos = get_primary_keys_att_no(relid);
 
-    unique_key = transform_primary_keys(relid, curAttNum, keyAttnos, slot);
+    unique_key = transform_primary_keys(relid, keyAttnos, slot);
 
     // set path
     if (*path == NULL) {
-        *path = psprintf("%s", fnamestr);
+        *path = psprintf("%d_%s", curAttNum, fnamestr);
     } else {
         char *newStr = psprintf("%s_%s", *path, fnamestr);
         pfree(*path);

@@ -66,6 +66,11 @@ text *find_json_data(char *primaryKey, char *pathName) {
     return data->value;
 }
 
-void delete_datas_for_json(text *json) {
-
+void delete_by_primary_key(char *primaryKey) {
+    struct json_cache *cache;
+    HASH_FIND_STR(jsonCache, primaryKey, cache);
+    if (cache == NULL)
+        return;
+    HASH_DEL(jsonCache, cache); // 从Hash Table中删除
+    free(cache); // 释放空间
 }

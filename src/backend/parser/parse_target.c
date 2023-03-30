@@ -595,7 +595,7 @@ transformAssignedExpr(ParseState *pstate,
 					 errhint("You will need to rewrite or cast the expression."),
 					 parser_errposition(pstate, exprLocation(orig_expr))));
 	}
-
+    // note:yyh 信息丰富
 	pstate->p_expr_kind = sv_expr_kind;
 
 	return expr;

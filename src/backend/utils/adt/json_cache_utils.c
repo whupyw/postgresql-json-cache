@@ -53,11 +53,11 @@ extern int *get_primary_keys_index_old(Oid relid, int *nkeys) {
  * @param nkeys 主键数量
  * @param keysIdx 主键的列号数组
  * @param slot 正在扫描的元组
- * @return 标识一个JSON类型属性的key, tableOid_currentAttNum_pkColumn1_pkVal1_pkColumn2_pkVal2...pkColumnK_pkValK
+ * @return 标识一个JSON类型属性的key, tableOid_pkColumn1_pkVal1_pkColumn2_pkVal2...pkColumnK_pkValK
  */
-extern char *transform_primary_keys(Oid relid, int curAttNum, PrimaryKeyInfo* pkinfo, TupleTableSlot* slot) {
+extern char *transform_primary_keys(Oid relid, PrimaryKeyInfo *pkinfo, TupleTableSlot *slot) {
 
-    char *result = psprintf("%u_%d", (unsigned int) relid, curAttNum);
+    char *result = psprintf("%u", (unsigned int) relid);
 
     if (pkinfo->nkeys == 0)
         return NULL;
@@ -68,9 +68,6 @@ extern char *transform_primary_keys(Oid relid, int curAttNum, PrimaryKeyInfo* pk
         int  key_index;
         int32  key_value;
         char *new_result;
-
-        Oid type_id;
-        FmgrInfo *out_func;
 
         key_index = (int) pkinfo->keyAttno[i];
 
