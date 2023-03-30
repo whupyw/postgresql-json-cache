@@ -111,6 +111,8 @@ static const void **dispatch_table = NULL;
 /* jump target -> opcode lookup table */
 static ExprEvalOpLookup reverse_dispatch_table[EEOP_LAST];
 
+char **path; // 存储path(address_postcode)
+
 #define EEO_SWITCH()
 #define EEO_CASE(name)		CASE_##name:
 #define EEO_DISPATCH()		goto *((void *) op->opcode)
@@ -222,6 +224,7 @@ typedef struct ScalarArrayOpExprHashTable
 #define SH_GET_HASH(tb, a) a->hash
 #define SH_DEFINE
 #include "lib/simplehash.h"
+#include "utils/json_cache_utils.h"
 
 /*
  * Prepare ExprState for interpreted execution.
@@ -587,6 +590,11 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			*op->resvalue = scanslot->tts_values[attnum];
 			*op->resnull = scanslot->tts_isnull[attnum];
 
+            // 不同的变量, 释放空间
+            if (path != NULL && *path != NULL) {
+                pfree(*path); // alarm:yyh 注意pfree和free的区别
+                *path = NULL;
+            }
 			EEO_NEXT();
 		}
 
@@ -746,7 +754,18 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 				}
 			}
 			fcinfo->isnull = false;
-			d = op->d.func.fn_addr(fcinfo);
+
+            if (path == NULL) {
+                path = malloc(sizeof(char*));
+                *path = NULL;
+            }
+
+            // 如果调用的是json_object_field, 转到自定义的函数
+            if (fcinfo->flinfo->fn_oid == 3947)
+                d = json_object_field_with_cache(fcinfo, scanslot, scanslot->tts_tableOid,
+                                                 state->steps->d.var.attnum, path);
+            else
+                d = op->d.func.fn_addr(fcinfo);
 			*op->resvalue = d;
 			*op->resnull = fcinfo->isnull;
 
@@ -1799,6 +1818,10 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 	}
 
 out:
+    if (path != NULL) {
+        free(path);
+        path = NULL;
+    }
 	*isnull = state->resnull;
 	return state->resvalue;
 }

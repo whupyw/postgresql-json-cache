@@ -39,6 +39,8 @@
 #include "utils/syscache.h"
 #include "utils/typcache.h"
 
+#include "utils/json_cache_utils.h"
+
 /* Operations available for setPath */
 #define JB_PATH_CREATE					0x0001
 #define JB_PATH_DELETE					0x0002
@@ -808,19 +810,59 @@ json_object_field(PG_FUNCTION_ARGS)
 	text	   *fname = PG_GETARG_TEXT_PP(1);
 	char	   *fnamestr = text_to_cstring(fname);
 	text	   *result;
-    // processing:yyh 查询是否已经缓存
-    result = find_json_data(json, fnamestr);
-    if (result == NULL) {
-        // note:yyh 在 get_worker 内 parse
-        result = get_worker(json, &fnamestr, NULL, 1, false);
-        // 加入缓存
-        add_json_data(json, fnamestr, result);
-    }
+
+    result = get_worker(json, &fnamestr, NULL, 1, false);
 
 	if (result != NULL)
 		PG_RETURN_TEXT_P(result);
 	else
 		PG_RETURN_NULL();
+}
+
+extern Datum
+json_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int curAttNum, char **path) {
+    text *json = PG_GETARG_TEXT_PP(0);
+    text *fname = PG_GETARG_TEXT_PP(1);
+    char *fnamestr = text_to_cstring(fname);
+    text *result = NULL;
+
+    char *unique_key; // The key for the map of json cache
+
+    PrimaryKeyInfo *keyAttnos; // 主键的列号数组
+
+    keyAttnos = get_primary_keys_att_no(relid);
+
+    unique_key = transform_primary_keys(relid, curAttNum, keyAttnos, slot);
+
+    // set path
+    if (*path == NULL) {
+        *path = psprintf("%s", fnamestr);
+    } else {
+        char *newStr = psprintf("%s_%s", *path, fnamestr);
+        pfree(*path);
+        *path = newStr;
+    }
+
+    // note:yyh 查询是否已经缓存
+    if (unique_key != NULL)
+        result = find_json_data(unique_key, *path);
+
+    if (result == NULL) {
+        // note:yyh 在 get_worker 内 parse
+        result = get_worker(json, &fnamestr, NULL, 1, false);
+        // 加入缓存
+        if (result != NULL && unique_key != NULL) {
+            add_json_data(unique_key, *path, result);
+        }
+    }
+
+    free(keyAttnos);
+    pfree(unique_key);
+
+    if (result != NULL)
+        PG_RETURN_TEXT_P(result);
+    else
+        PG_RETURN_NULL();
 }
 
 Datum
@@ -1076,6 +1118,8 @@ get_worker(text *json,
 	JsonSemAction *sem = palloc0(sizeof(JsonSemAction)); // 动态分配一块内存，用于存储json的语义操作信息。
 	GetState   *state = palloc0(sizeof(GetState)); // 动态分配一块内存，用于存储json解析的相关状态。
 
+    char **testPath = tpath;
+
 	Assert(npath >= 0);
 
 	state->lex = lex;
@@ -1089,6 +1133,15 @@ get_worker(text *json,
 
 	if (npath > 0)
 		state->pathok[0] = true;
+
+    // 测试代码
+
+    for (int i = 0; ; i++) {
+        char *str = testPath[i];
+        if (str == NULL)
+            break;
+        printf("%s\n", str);
+    }
 
 	sem->semstate = (void *) state;
 

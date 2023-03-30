@@ -2488,7 +2488,7 @@ ExecModifyTable(PlanState *pstate)
 			char		relkind;
 			Datum		datum;
 			bool		isNull;
-
+            // todo:yyh 执行更新语句
 			relkind = resultRelInfo->ri_RelationDesc->rd_rel->relkind;
 			if (relkind == RELKIND_RELATION ||
 				relkind == RELKIND_MATVIEW ||

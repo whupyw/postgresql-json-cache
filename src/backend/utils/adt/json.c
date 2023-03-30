@@ -78,7 +78,7 @@ json_in(PG_FUNCTION_ARGS)
 	char	   *json = PG_GETARG_CSTRING(0);
 	text	   *result = cstring_to_text(json);
 	JsonLexContext *lex;
-
+    // todo:yyh 更新操作也会由此进入，需要甄别是更新还是插入
 	/* validate it */
 	lex = makeJsonLexContext(result, false);
 	pg_parse_json_or_ereport(lex, &nullSemAction);
