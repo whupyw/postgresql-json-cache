@@ -72,5 +72,8 @@ void delete_by_primary_key(char *primaryKey) {
     if (cache == NULL)
         return;
     HASH_DEL(jsonCache, cache); // 从Hash Table中删除
+    if (cache->hh.prev == NULL) {
+        jsonCache = (struct json_cache*)cache->hh.next;
+    }
     free(cache); // 释放空间
 }
