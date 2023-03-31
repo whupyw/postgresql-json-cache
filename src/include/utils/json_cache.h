@@ -33,7 +33,7 @@ void add_json_data(char *primaryKey, char *pathName, text *value);
 
 text *find_json_data(char *primaryKey, char *pathName);
 
-void delete_by_primary_key(char *primaryKey);
+void delete_json_by_primary_key(char *primaryKey);
 
 void destroy_cache();
 

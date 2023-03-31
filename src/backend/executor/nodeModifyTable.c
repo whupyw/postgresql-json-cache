@@ -1846,10 +1846,12 @@ lreplace:;
                 keyAttnos = get_primary_keys_att_no(relid);
                 unique_key = transform_primary_keys(relid, keyAttnos, slot);
                 if (unique_key != NULL) {
-                    delete_by_primary_key(unique_key);
+                    delete_json_by_primary_key(unique_key);
                 }
-                free(keyAttnos);
-                pfree(unique_key);
+                if (keyAttnos != NULL)
+                    free(keyAttnos);
+                if (unique_key != NULL)
+                    pfree(unique_key);
                 break;
             }
 
@@ -2629,10 +2631,12 @@ ExecModifyTable(PlanState *pstate)
                 unique_key = transform_primary_keys(relid, keyAttnos, subplanstate->ps_ExprContext->ecxt_scantuple);
 
                 if (unique_key != NULL) {
-                    delete_by_primary_key(unique_key);
+                    delete_json_by_primary_key(unique_key);
                 }
-                free(keyAttnos);
-                pfree(unique_key);
+                if (keyAttnos != NULL)
+                    free(keyAttnos);
+                if (unique_key != NULL)
+                    pfree(unique_key);
 
                 slot = ExecDelete(node, resultRelInfo, tupleid, oldtuple,
                                   planSlot, &node->mt_epqstate, estate,

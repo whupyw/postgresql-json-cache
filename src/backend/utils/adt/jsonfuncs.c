@@ -40,6 +40,7 @@
 #include "utils/typcache.h"
 
 #include "utils/json_cache_utils.h"
+#include "utils/jsonb_cache.h"
 
 /* Operations available for setPath */
 #define JB_PATH_CREATE					0x0001
@@ -826,26 +827,24 @@ json_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid 
     char *fnamestr = text_to_cstring(fname);
     text *result = NULL;
 
-    char *unique_key; // The key for the map of json cache
-
-    PrimaryKeyInfo *keyAttnos; // 主键的列号数组
+    char *unique_key = NULL; // The key for the map of json cache
+    PrimaryKeyInfo *keyAttnos = NULL; // 主键的列号数组
 
     keyAttnos = get_primary_keys_att_no(relid);
 
     unique_key = transform_primary_keys(relid, keyAttnos, slot);
 
     // set path
-    if (*path == NULL) {
-        *path = psprintf("%d_%s", curAttNum, fnamestr);
-    } else {
-        char *newStr = psprintf("%s_%s", *path, fnamestr);
-        pfree(*path);
-        *path = newStr;
-    }
-
-    // note:yyh 查询是否已经缓存
-    if (unique_key != NULL)
+    if (unique_key != NULL) {
+        if (*path == NULL) {
+            *path = psprintf("%d_%s", curAttNum, fnamestr);
+        } else {
+            char *newStr = psprintf("%s_%s", *path, fnamestr);
+            pfree(*path);
+            *path = newStr;
+        }
         result = find_json_data(unique_key, *path);
+    }
 
     if (result == NULL) {
         // note:yyh 在 get_worker 内 parse
@@ -856,8 +855,10 @@ json_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid 
         }
     }
 
-    free(keyAttnos);
-    pfree(unique_key);
+    if (keyAttnos != NULL)
+        free(keyAttnos);
+    if (unique_key != NULL)
+        pfree(unique_key);
 
     if (result != NULL)
         PG_RETURN_TEXT_P(result);
@@ -885,6 +886,53 @@ jsonb_object_field(PG_FUNCTION_ARGS)
 		PG_RETURN_JSONB_P(JsonbValueToJsonb(v));
 
 	PG_RETURN_NULL();
+}
+
+extern Datum
+jsonb_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int curAttNum, char **path) {
+    Jsonb	   *jb = PG_GETARG_JSONB_P(0);
+    text	   *key = PG_GETARG_TEXT_PP(1);
+    char       *fnamestr = text_to_cstring(key);
+    JsonbValue *v = NULL;
+    JsonbValue	vbuf;
+
+    char *unique_key = NULL; // The key for the map of jsonb cache
+    PrimaryKeyInfo *keyAttnos = NULL; // 主键的列号数组
+
+    if (!JB_ROOT_IS_OBJECT(jb))
+        PG_RETURN_NULL();
+
+    keyAttnos = get_primary_keys_att_no(relid);
+
+    unique_key = transform_primary_keys(relid, keyAttnos, slot);
+
+    if (unique_key != NULL) {
+        if (*path == NULL) {
+            *path = psprintf("%d_%s", curAttNum, fnamestr);
+        } else {
+            char *newStr = psprintf("%s_%s", *path, fnamestr);
+            pfree(*path);
+            *path = newStr;
+        }
+        v = find_jsonb_data(unique_key, *path);
+    }
+    if (v == NULL) {
+        v = getKeyJsonValueFromContainer(&jb->root, VARDATA_ANY(key), VARSIZE_ANY_EXHDR(key), &vbuf);
+
+        if (v != NULL && unique_key != NULL)
+            add_jsonb_data(unique_key, *path, v);
+    }
+
+    if (keyAttnos != NULL)
+        free(keyAttnos);
+    if (unique_key != NULL)
+        pfree(unique_key);
+
+    // note:yyh We get 'v' as our result
+    if (v != NULL)
+        PG_RETURN_JSONB_P(JsonbValueToJsonb(v));
+
+    PG_RETURN_NULL();
 }
 
 Datum

@@ -15,9 +15,10 @@ typedef struct KeyInfo {
 
 extern PrimaryKeyInfo *get_primary_keys_att_no(Oid relid);
 
-extern int *get_primary_keys_index_old(Oid relid, int *nkeys);
-
 extern char *transform_primary_keys(Oid relid, PrimaryKeyInfo *pkinfo, TupleTableSlot *slot);
 
 extern Datum
 json_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int curAttNum, char **path);
+
+extern Datum
+jsonb_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int curAttNum, char **path);

@@ -762,8 +762,9 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 
             // 如果调用的是json_object_field, 转到自定义的函数
             if (fcinfo->flinfo->fn_oid == 3947)
-                d = json_object_field_with_cache(fcinfo, scanslot, scanslot->tts_tableOid,
-                                                 state->steps->d.var.attnum, path);
+                d = json_object_field_with_cache(fcinfo, scanslot, scanslot->tts_tableOid, state->steps->d.var.attnum, path);
+            else if (fcinfo->flinfo->fn_oid == 3478)
+                d = jsonb_object_field_with_cache(fcinfo, scanslot, scanslot->tts_tableOid, state->steps->d.var.attnum, path);
             else
                 d = op->d.func.fn_addr(fcinfo);
 			*op->resvalue = d;
