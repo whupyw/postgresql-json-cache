@@ -1436,7 +1436,7 @@ RemoveRelations(DropStmt *drop)
 		obj.classId = RelationRelationId;
 		obj.objectId = relOid;
 		obj.objectSubId = 0;
-
+        //todo:yyh 在此处进行缓存删除
 		add_exact_object_address(&obj, objects);
 	}
 

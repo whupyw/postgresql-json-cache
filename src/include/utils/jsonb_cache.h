@@ -17,10 +17,13 @@
 #include "uthash.h"
 #include "../postgres.h"
 #include "jsonb.h"
+#include <time.h>
+
 
 struct jsonb_data {
     char *path_name; // jsonb 中的键
     JsonbValue *value; // 存储 JsonbValue
+    time_t updateTime; // 更新时间， presentTime - updateTime >= expireTime, 删除数据
     UT_hash_handle hh; /* makes this structure hashable */
 };
 

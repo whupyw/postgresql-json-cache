@@ -1846,7 +1846,7 @@ lreplace:;
                 keyAttnos = get_primary_keys_att_no(relid);
                 unique_key = transform_primary_keys(relid, keyAttnos, slot);
                 if (unique_key != NULL) {
-                    delete_json_by_primary_key(unique_key);
+                    delete_json_by_primary_key(unique_key); // todo:yyh 替换为delete_json_by_pk_and_attnum
                 }
                 if (keyAttnos != NULL)
                     free(keyAttnos);

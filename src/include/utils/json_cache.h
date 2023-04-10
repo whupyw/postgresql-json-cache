@@ -16,10 +16,14 @@
 
 #include "uthash.h"
 #include "../postgres.h"
+#include <time.h>
+
+#define EXPIRE_TIME_JSON 43200
 
 struct json_data {
     char *path_name; // json 中的键
     text *value; // 存储 text 地址
+    long updateTime; // 更新时间， presentTime - updateTime >= expireTime, 删除数据
     UT_hash_handle hh; /* makes this structure hashable */
 };
 
@@ -33,8 +37,17 @@ void add_json_data(char *primaryKey, char *pathName, text *value);
 
 text *find_json_data(char *primaryKey, char *pathName);
 
+// 根据关系表oid删除缓存
+void delete_json_by_relid(Oid relid);
+
 void delete_json_by_primary_key(char *primaryKey);
 
-void destroy_cache();
+void delete_json_by_pk_and_attnum(char *primaryKey, int attnum);
+
+void delete_json_by_pk_and_path(char *primaryKey, char *pathName);
+
+void destroy_json_cache();
+
+void clean_expired_cache();
 
 #endif

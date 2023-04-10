@@ -77,3 +77,41 @@ void delete_json_by_primary_key(char *primaryKey) {
     }
     free(cache); // 释放空间
 }
+
+void clean_expired_cache() {
+    struct json_cache *jsonCacheIter;
+    struct json_data *jsonDataIter;
+    struct json_cache *nextCache = NULL;
+
+    long presentTime = (long) time(NULL);
+    // 发生错误了, 停止程序
+    if (presentTime <= 0)
+        return;
+
+    for (jsonCacheIter = jsonCache; jsonCacheIter != NULL; jsonCacheIter = nextCache) {
+        struct json_data *nextData = NULL;
+        for (jsonDataIter = jsonCacheIter->datas; jsonDataIter != NULL; jsonDataIter = nextData) {
+            long updateTime = jsonDataIter->updateTime;
+            // 更新时间未初始化或者未超过最大生存时间, 不 clean
+            if (updateTime <= 0 || presentTime - updateTime < EXPIRE_TIME_JSON)
+                continue;
+
+            HASH_DEL(jsonCacheIter->datas, jsonDataIter);
+            // change the node head if the previous head is to be deleted
+            if (jsonDataIter->hh.prev == NULL) {
+                jsonCacheIter->datas = (struct json_data*)jsonDataIter->hh.next;
+            }
+            nextData = jsonDataIter->hh.next;
+            free(jsonDataIter);
+        }
+        nextCache = jsonCacheIter->hh.next;
+        // 当datas是空的时候, 可以把cache也删除了
+        if (jsonCacheIter->datas == NULL) {
+            HASH_DEL(jsonCache, jsonCacheIter);
+            if (jsonCacheIter->hh.prev == NULL) {
+                jsonCache = (struct json_cache*)jsonCacheIter->hh.next;
+            }
+            free(jsonCacheIter);
+        }
+    }
+}
