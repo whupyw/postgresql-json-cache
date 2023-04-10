@@ -14,6 +14,8 @@ override CPPFLAGS := -I. -I$(srcdir) $(CPPFLAGS)
 OBJS = \
 	acl.o \
 	amutils.o \
+	arc_json.o \
+	arc_jsonb.o \
 	array_expanded.o \
 	array_selfuncs.o \
 	array_typanalyze.o \
