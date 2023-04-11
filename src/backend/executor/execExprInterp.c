@@ -111,7 +111,6 @@ static const void **dispatch_table = NULL;
 /* jump target -> opcode lookup table */
 static ExprEvalOpLookup reverse_dispatch_table[EEOP_LAST];
 
-char **path; // 存储path(address_postcode)
 
 #define EEO_SWITCH()
 #define EEO_CASE(name)		CASE_##name:
@@ -591,9 +590,9 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			*op->resnull = scanslot->tts_isnull[attnum];
 
             // 不同的变量, 释放空间
-            if (path != NULL && *path != NULL) {
-                pfree(*path); // alarm:yyh 注意pfree和free的区别
-                *path = NULL;
+            if (path != NULL) {
+                pfree(path); // alarm:yyh 注意pfree和free的区别
+                path = NULL;
             }
 			EEO_NEXT();
 		}
@@ -762,9 +761,9 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 
             // 如果调用的是json_object_field, 转到自定义的函数
             if (fcinfo->flinfo->fn_oid == 3947)
-                d = json_object_field_with_cache(fcinfo, scanslot, scanslot->tts_tableOid, state->steps->d.var.attnum, path);
+                d = json_object_field_with_cache(fcinfo, scanslot, scanslot->tts_tableOid, state->steps->d.var.attnum);
             else if (fcinfo->flinfo->fn_oid == 3478)
-                d = jsonb_object_field_with_cache(fcinfo, scanslot, scanslot->tts_tableOid, state->steps->d.var.attnum, path);
+                d = jsonb_object_field_with_cache(fcinfo, scanslot, scanslot->tts_tableOid, state->steps->d.var.attnum);
             else
                 d = op->d.func.fn_addr(fcinfo);
 			*op->resvalue = d;

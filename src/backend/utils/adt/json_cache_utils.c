@@ -107,3 +107,33 @@ extern PrimaryKeyInfo *get_primary_keys_att_no(Oid relid) {
 
     return pkinfo;
 }
+
+extern inline char *get_composite_key(Oid relid, TupleTableSlot *slot, char *fnamestr, int attNum) {
+    char *primaryKey = NULL; // The key for the map of json cache
+    char *compositeKey = NULL;
+    PrimaryKeyInfo *keyAttnos = NULL; // 主键的列号数组
+
+    keyAttnos = get_primary_keys_att_no(relid);
+
+    if (keyAttnos == NULL)
+        return NULL;
+
+    primaryKey = transform_primary_keys(relid, keyAttnos, slot);
+
+    free(keyAttnos);
+
+    if (primaryKey == NULL)
+        return NULL;
+
+    if (path == NULL) {
+        path = psprintf("%d_%s", attNum, fnamestr);
+    } else {
+        char *newStr = psprintf("%s_%s", path, fnamestr);
+        pfree(path);
+        path = newStr;
+    }
+
+    compositeKey = psprintf("%s_%s", primaryKey, path);
+    pfree(primaryKey);
+    return compositeKey;
+}

@@ -14,8 +14,6 @@
 
 #include "postgres.h"
 
-#include "utils/json_cache.h"
-
 #include <limits.h>
 
 #include "access/htup_details.h"
@@ -41,6 +39,8 @@
 
 #include "utils/json_cache_utils.h"
 #include "utils/jsonb_cache.h"
+#include "utils/json_cache.h"
+#include "utils/arc_json.h"
 
 /* Operations available for setPath */
 #define JB_PATH_CREATE					0x0001
@@ -821,44 +821,30 @@ json_object_field(PG_FUNCTION_ARGS)
 }
 
 extern Datum
-json_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int curAttNum, char **path) {
+json_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int attNum) {
     text *json = PG_GETARG_TEXT_PP(0);
     text *fname = PG_GETARG_TEXT_PP(1);
     char *fnamestr = text_to_cstring(fname);
     text *result = NULL;
 
-    char *unique_key = NULL; // The key for the map of json cache
-    PrimaryKeyInfo *keyAttnos = NULL; // 主键的列号数组
+    char *compositeKey = NULL; // The key for the map of json cache
+    enum HitCase hitCase;
 
-    keyAttnos = get_primary_keys_att_no(relid);
+    compositeKey = get_composite_key(relid, slot, fnamestr, attNum);
 
-    unique_key = transform_primary_keys(relid, keyAttnos, slot);
-
-    // set path
-    if (unique_key != NULL) {
-        if (*path == NULL) {
-            *path = psprintf("%d_%s", curAttNum, fnamestr);
-        } else {
-            char *newStr = psprintf("%s_%s", *path, fnamestr);
-            pfree(*path);
-            *path = newStr;
-        }
-        result = find_json_data(unique_key, *path);
-    }
+    hitCase = get_json_data(compositeKey, &result);
 
     if (result == NULL) {
         // note:yyh 在 get_worker 内 parse
         result = get_worker(json, &fnamestr, NULL, 1, false);
         // 加入缓存
-        if (result != NULL && unique_key != NULL) {
-            add_json_data(unique_key, *path, result);
+        if (result != NULL && compositeKey != NULL) {
+            insert_json_data(compositeKey, result, hitCase);
         }
     }
 
-    if (keyAttnos != NULL)
-        free(keyAttnos);
-    if (unique_key != NULL)
-        pfree(unique_key);
+    if (compositeKey != NULL)
+        pfree(compositeKey);
 
     if (result != NULL)
         PG_RETURN_TEXT_P(result);
@@ -889,7 +875,7 @@ jsonb_object_field(PG_FUNCTION_ARGS)
 }
 
 extern Datum
-jsonb_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int curAttNum, char **path) {
+jsonb_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int curAttNum) {
     Jsonb	   *jb = PG_GETARG_JSONB_P(0);
     text	   *key = PG_GETARG_TEXT_PP(1);
     char       *fnamestr = text_to_cstring(key);
@@ -907,20 +893,20 @@ jsonb_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid
     unique_key = transform_primary_keys(relid, keyAttnos, slot);
 
     if (unique_key != NULL) {
-        if (*path == NULL) {
-            *path = psprintf("%d_%s", curAttNum, fnamestr);
+        if (path == NULL) {
+            path = psprintf("%d_%s", curAttNum, fnamestr);
         } else {
             char *newStr = psprintf("%s_%s", *path, fnamestr);
-            pfree(*path);
-            *path = newStr;
+            pfree(path);
+            path = newStr;
         }
-        v = find_jsonb_data(unique_key, *path);
+        v = find_jsonb_data(unique_key, path);
     }
     if (v == NULL) {
         v = getKeyJsonValueFromContainer(&jb->root, VARDATA_ANY(key), VARSIZE_ANY_EXHDR(key), &vbuf);
 
         if (v != NULL && unique_key != NULL)
-            add_jsonb_data(unique_key, *path, v);
+            add_jsonb_data(unique_key, path, v);
     }
 
     if (keyAttnos != NULL)
