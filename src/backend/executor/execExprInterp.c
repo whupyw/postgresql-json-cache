@@ -590,10 +590,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			*op->resnull = scanslot->tts_isnull[attnum];
 
             // 不同的变量, 释放空间
-            if (path != NULL) {
-                pfree(path); // alarm:yyh 注意pfree和free的区别
-                path = NULL;
-            }
+            free_path();
 			EEO_NEXT();
 		}
 
@@ -753,11 +750,6 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 				}
 			}
 			fcinfo->isnull = false;
-
-            if (path == NULL) {
-                path = malloc(sizeof(char*));
-                *path = NULL;
-            }
 
             // 如果调用的是json_object_field, 转到自定义的函数
             if (fcinfo->flinfo->fn_oid == 3947)
@@ -1818,10 +1810,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 	}
 
 out:
-    if (path != NULL) {
-        free(path);
-        path = NULL;
-    }
+    free_path();
 	*isnull = state->resnull;
 	return state->resvalue;
 }

@@ -33,18 +33,6 @@ struct JSON_CACHE_PTR {
     UT_hash_handle hh;
 };
 
-struct JSON_ARC_LIST *t1 = NULL;
-struct JSON_ARC_LIST *b1 = NULL;
-struct JSON_ARC_LIST *t2 = NULL;
-struct JSON_ARC_LIST *b2 = NULL;
-
-struct JSON_CACHE_PTR *map_head = NULL;
-
-const double t_b_total = 1000.0; // c
-double t1_cap = 0.0; // p
-
-uint hit_count, get_count;
-
 enum HitCase get_json_data(char *compositeKey, text **result);
 
 void insert_json_data(char *compositeKey, text *result, enum HitCase hitCase);
@@ -53,13 +41,14 @@ void init_arc_lists(void);
 
 void init_specific_list(struct JSON_ARC_LIST **list, enum ListType listType);
 
-inline void move_to_mru(struct JSON_CACHE_PTR *node, enum ListType desType);
+void move_to_mru(struct JSON_CACHE_PTR *node, enum ListType desType);
 
-inline struct JSON_CACHE_PTR * remove_from_list(struct JSON_CACHE_PTR *node);
+struct JSON_CACHE_PTR * remove_from_list(struct JSON_CACHE_PTR *node);
 
-inline void add_to_list_head(struct JSON_CACHE_PTR *node, enum ListType desType);
+void add_to_list_head(struct JSON_CACHE_PTR *node, enum ListType desType);
 
-inline struct JSON_ARC_LIST *fetch_list_by_type(enum ListType listType);
+struct JSON_ARC_LIST *fetch_list_by_type(enum ListType listType);
 
 void replace(bool in_b2);
+
 #endif

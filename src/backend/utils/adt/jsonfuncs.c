@@ -832,7 +832,8 @@ json_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid 
 
     compositeKey = get_composite_key(relid, slot, fnamestr, attNum);
 
-    hitCase = get_json_data(compositeKey, &result);
+    if (compositeKey != NULL)
+        hitCase = get_json_data(compositeKey, &result);
 
     if (result == NULL) {
         // note:yyh 在 get_worker 内 parse
@@ -892,21 +893,8 @@ jsonb_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid
 
     unique_key = transform_primary_keys(relid, keyAttnos, slot);
 
-    if (unique_key != NULL) {
-        if (path == NULL) {
-            path = psprintf("%d_%s", curAttNum, fnamestr);
-        } else {
-            char *newStr = psprintf("%s_%s", *path, fnamestr);
-            pfree(path);
-            path = newStr;
-        }
-        v = find_jsonb_data(unique_key, path);
-    }
     if (v == NULL) {
         v = getKeyJsonValueFromContainer(&jb->root, VARDATA_ANY(key), VARSIZE_ANY_EXHDR(key), &vbuf);
-
-        if (v != NULL && unique_key != NULL)
-            add_jsonb_data(unique_key, path, v);
     }
 
     if (keyAttnos != NULL)

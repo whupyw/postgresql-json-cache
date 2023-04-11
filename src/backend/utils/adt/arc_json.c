@@ -3,6 +3,18 @@
 #define min(a,b) ((a) < (b) ? (a) : (b))
 #define max(a,b) ((a) > (b) ? (a) : (b))
 
+struct JSON_ARC_LIST *t1 = NULL;
+struct JSON_ARC_LIST *b1 = NULL;
+struct JSON_ARC_LIST *t2 = NULL;
+struct JSON_ARC_LIST *b2 = NULL;
+
+struct JSON_CACHE_PTR *map_head = NULL;
+
+const double t_b_total = 1000.0; // c
+double t1_cap = 0.0; // p
+
+uint hit_count, get_count;
+
 void init_arc_lists(void) {
     init_specific_list(&t1, T1);
     init_specific_list(&t2, T2);
@@ -82,13 +94,15 @@ enum HitCase get_json_data(char *compositeKey, text **result) {
 }
 
 void insert_json_data(char *compositeKey, text *result, enum HitCase hitCase) {
+    struct JSON_CACHE_PTR *node;
+
     if (hitCase == HitB) {
         t2->head->json_value = (text*) malloc(sizeof(text) + VARSIZE(result) - VARHDRSZ);
         memcpy(t2->head->json_value, result, sizeof(text) + VARSIZE(result) - VARHDRSZ);
         return;
     }
     // HitNone
-    struct JSON_CACHE_PTR *node = (struct JSON_CACHE_PTR*) malloc(sizeof(struct JSON_CACHE_PTR));
+    node = (struct JSON_CACHE_PTR*) malloc(sizeof(struct JSON_CACHE_PTR));
     // node->composite_key
     node->composite_key = (char *) malloc(strlen(compositeKey) + 1);
     strcpy(node->composite_key, compositeKey);
@@ -101,7 +115,7 @@ void insert_json_data(char *compositeKey, text *result, enum HitCase hitCase) {
     HASH_ADD_STR(map_head, composite_key, node);
 }
 
-inline void move_to_mru(struct JSON_CACHE_PTR *node, enum ListType desType) {
+void move_to_mru(struct JSON_CACHE_PTR *node, enum ListType desType) {
     // 从原来的list移除
     remove_from_list(node);
     // 添加到新的list头部
@@ -109,7 +123,7 @@ inline void move_to_mru(struct JSON_CACHE_PTR *node, enum ListType desType) {
     node->list_type = desType;
 }
 
-inline struct JSON_CACHE_PTR * remove_from_list(struct JSON_CACHE_PTR *node) {
+struct JSON_CACHE_PTR * remove_from_list(struct JSON_CACHE_PTR *node) {
     struct JSON_ARC_LIST *list = fetch_list_by_type(node->list_type);
     if (list->head == node && list->tail == node) {
         list->head = NULL;
@@ -128,7 +142,7 @@ inline struct JSON_CACHE_PTR * remove_from_list(struct JSON_CACHE_PTR *node) {
     return node;
 }
 
-inline void add_to_list_head(struct JSON_CACHE_PTR *node, enum ListType desType) {
+void add_to_list_head(struct JSON_CACHE_PTR *node, enum ListType desType) {
     struct JSON_ARC_LIST *desList = fetch_list_by_type(desType);
     node->prev = NULL;
     node->next = desList->head;
@@ -140,16 +154,14 @@ inline void add_to_list_head(struct JSON_CACHE_PTR *node, enum ListType desType)
 }
 
 inline struct JSON_ARC_LIST *fetch_list_by_type(enum ListType listType) {
-    switch (listType) {
-        case T1:
-            return t1;
-        case T2:
-            return t2;
-        case B1:
-            return b1;
-        case B2:
-            return b2;
-    }
+    if (listType == T1)
+        return t1;
+    if (listType == T2)
+        return t2;
+    if (listType == B1)
+        return b1;
+    if (listType == B2)
+        return b2;
 }
 
 // 把 T1/T2尾部的数据移动到B1/B2的头部

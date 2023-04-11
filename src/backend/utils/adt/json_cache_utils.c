@@ -1,16 +1,18 @@
 #include "utils/json_cache_utils.h"
 
+char *path; // 存储path(12->address->postcode)
+
 /*
  * transform_primary_keys
  * 输出唯一标识一个JSON类型属性的key
  * @param nkeys 主键数量
  * @param keysIdx 主键的列号数组
  * @param slot 正在扫描的元组
- * @return 标识一个JSON类型属性的key, tableOid_pkColumn1_pkVal1_pkColumn2_pkVal2...pkColumnK_pkValK
+ * @return 标识一个JSON类型属性的key, tableOid_pkAttNum1:pkVal1&pkAttNum2:pkVal2...pkAttNumK:pkValK
  */
 extern char *transform_primary_keys(Oid relid, PrimaryKeyInfo *pkinfo, TupleTableSlot *slot) {
 
-    char *result = psprintf("%u", (unsigned int) relid);
+    char *result = NULL;
 
     if (pkinfo == NULL || pkinfo->nkeys == 0)
         return NULL;
@@ -32,9 +34,13 @@ extern char *transform_primary_keys(Oid relid, PrimaryKeyInfo *pkinfo, TupleTabl
 
         key_value = DatumGetInt32(value); // todo:yyh 临时方案, 需要switch语句判断类型
 
-        new_result = psprintf("%s_%d_%d", result, key_index, key_value);
-        pfree(result);
-        result = new_result;
+        if (result == NULL) {
+            result = psprintf("%u_%d:%d", (unsigned int) relid, key_index, key_value);
+        } else {
+            new_result = psprintf("%s&%d:%d", result, key_index, key_value);
+            pfree(result);
+            result = new_result;
+        }
     }
 
     return result;
@@ -108,7 +114,8 @@ extern PrimaryKeyInfo *get_primary_keys_att_no(Oid relid) {
     return pkinfo;
 }
 
-extern inline char *get_composite_key(Oid relid, TupleTableSlot *slot, char *fnamestr, int attNum) {
+// 121_3:12&4:12_3->address->postcode
+extern char *get_composite_key(Oid relid, TupleTableSlot *slot, char *fnamestr, int attNum) {
     char *primaryKey = NULL; // The key for the map of json cache
     char *compositeKey = NULL;
     PrimaryKeyInfo *keyAttnos = NULL; // 主键的列号数组
@@ -126,14 +133,22 @@ extern inline char *get_composite_key(Oid relid, TupleTableSlot *slot, char *fna
         return NULL;
 
     if (path == NULL) {
-        path = psprintf("%d_%s", attNum, fnamestr);
+        path = psprintf("%d->%s", attNum, fnamestr);
     } else {
-        char *newStr = psprintf("%s_%s", path, fnamestr);
+        char *newStr = psprintf("%s->%s", path, fnamestr);
         pfree(path);
         path = newStr;
     }
 
     compositeKey = psprintf("%s_%s", primaryKey, path);
     pfree(primaryKey);
+
     return compositeKey;
+}
+
+extern void free_path(void) {
+    if (path != NULL) {
+        pfree(path);
+        path = NULL;
+    }
 }
