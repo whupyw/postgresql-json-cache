@@ -39,7 +39,7 @@ void insert_json_data(char *compositeKey, text *result, enum HitCase hitCase);
 
 void init_arc_lists(void);
 
-void init_specific_list(struct JSON_ARC_LIST **list, enum ListType listType);
+void init_specific_list(struct JSON_ARC_LIST **list);
 
 void move_to_mru(struct JSON_CACHE_PTR *node, enum ListType desType);
 

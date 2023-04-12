@@ -38,9 +38,8 @@
 #include "utils/typcache.h"
 
 #include "utils/json_cache_utils.h"
-#include "utils/jsonb_cache.h"
-#include "utils/json_cache.h"
 #include "utils/arc_json.h"
+#include "utils/arc_jsonb.h"
 
 /* Operations available for setPath */
 #define JB_PATH_CREATE					0x0001
@@ -876,31 +875,32 @@ jsonb_object_field(PG_FUNCTION_ARGS)
 }
 
 extern Datum
-jsonb_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int curAttNum) {
+jsonb_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int attNum) {
     Jsonb	   *jb = PG_GETARG_JSONB_P(0);
     text	   *key = PG_GETARG_TEXT_PP(1);
     char       *fnamestr = text_to_cstring(key);
     JsonbValue *v = NULL;
     JsonbValue	vbuf;
 
-    char *unique_key = NULL; // The key for the map of jsonb cache
-    PrimaryKeyInfo *keyAttnos = NULL; // 主键的列号数组
+    char *compositeKey = NULL; // The key for the map of json cache
+    enum JsonbHitCase hitCase;
 
     if (!JB_ROOT_IS_OBJECT(jb))
         PG_RETURN_NULL();
 
-    keyAttnos = get_primary_keys_att_no(relid);
+    compositeKey = get_composite_key(relid, slot, fnamestr, attNum);
 
-    unique_key = transform_primary_keys(relid, keyAttnos, slot);
+    if (compositeKey != NULL)
+        hitCase = get_jsonb_data(compositeKey, &v);
 
     if (v == NULL) {
         v = getKeyJsonValueFromContainer(&jb->root, VARDATA_ANY(key), VARSIZE_ANY_EXHDR(key), &vbuf);
+        if (v != NULL && compositeKey != NULL)
+            insert_jsonb_data(compositeKey, v, hitCase);
     }
 
-    if (keyAttnos != NULL)
-        free(keyAttnos);
-    if (unique_key != NULL)
-        pfree(unique_key);
+    if (compositeKey != NULL)
+        pfree(compositeKey);
 
     // note:yyh We get 'v' as our result
     if (v != NULL)

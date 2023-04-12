@@ -8,35 +8,26 @@ struct JSON_ARC_LIST *b1 = NULL;
 struct JSON_ARC_LIST *t2 = NULL;
 struct JSON_ARC_LIST *b2 = NULL;
 
-struct JSON_CACHE_PTR *map_head = NULL;
+struct JSON_CACHE_PTR *json_map_head = NULL;
 
 const double t_b_total = 1000.0; // c
 double t1_cap = 0.0; // p
 
-uint hit_count, get_count;
+uint json_hit_count, json_get_count;
 
 void init_arc_lists(void) {
-    init_specific_list(&t1, T1);
-    init_specific_list(&t2, T2);
-    init_specific_list(&b1, B1);
-    init_specific_list(&b2, B2);
+    init_specific_list(&t1);
+    init_specific_list(&t2);
+    init_specific_list(&b1);
+    init_specific_list(&b2);
 }
 
-void init_specific_list(struct JSON_ARC_LIST **list, enum ListType listType) {
+void init_specific_list(struct JSON_ARC_LIST **list) {
 
     *list = (struct JSON_ARC_LIST*) malloc(sizeof(struct JSON_ARC_LIST));
     (*list)->head = NULL;
     (*list)->tail = NULL;
-
-    switch (listType) {
-        case T1:
-        case B2:
-            (*list)->length = t1_cap;
-            break;
-        case T2:
-        case B1:
-            (*list)->length = t_b_total - t1_cap;
-    }
+    (*list)->length = 0;
 }
 
 enum HitCase get_json_data(char *compositeKey, text **result) {
@@ -45,23 +36,23 @@ enum HitCase get_json_data(char *compositeKey, text **result) {
     if (t1 == NULL) {
         init_arc_lists();
     }
-    get_count++;
-    HASH_FIND_STR(map_head, compositeKey, node);
+    json_get_count++;
+    HASH_FIND_STR(json_map_head, compositeKey, node);
     if (node == NULL) {
         if (t1->length + b1->length == t_b_total) {
             if (t1->length < t_b_total) {
-                HASH_DEL(map_head, b1->tail);
+                HASH_DEL(json_map_head, b1->tail);
                 free(remove_from_list(b1->tail));
                 replace(false);
             } else {
-                HASH_DEL(map_head, t1->tail);
+                HASH_DEL(json_map_head, t1->tail);
                 free(remove_from_list(t1->tail));
             }
         } else {
             double listSize = t1->length + t2->length + b1->length + b2->length;
             if (listSize >= t_b_total) {
                 if (listSize == t_b_total * 2) {
-                    HASH_DEL(map_head, b2->tail);
+                    HASH_DEL(json_map_head, b2->tail);
                     free(remove_from_list(b2->tail));
                 }
                 replace(false);
@@ -73,7 +64,7 @@ enum HitCase get_json_data(char *compositeKey, text **result) {
         case T1:
         case T2:
             move_to_mru(node, T2);
-            hit_count++;
+            json_hit_count++;
             *result = node->json_value;
             return HitT;
         case B1:
@@ -112,7 +103,7 @@ void insert_json_data(char *compositeKey, text *result, enum HitCase hitCase) {
     // node->list_type
     node->list_type = T1;
     add_to_list_head(node, T1);
-    HASH_ADD_STR(map_head, composite_key, node);
+    HASH_ADD_STR(json_map_head, composite_key, node);
 }
 
 void move_to_mru(struct JSON_CACHE_PTR *node, enum ListType desType) {
@@ -148,6 +139,8 @@ void add_to_list_head(struct JSON_CACHE_PTR *node, enum ListType desType) {
     node->next = desList->head;
     if (desList->head != NULL) {
         desList->head->prev = node;
+    } else {
+        desList->tail = node;
     }
     desList->head = node;
     desList->length++;
