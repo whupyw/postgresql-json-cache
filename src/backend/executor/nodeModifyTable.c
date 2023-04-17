@@ -53,7 +53,7 @@
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/json_cache_utils.h"
-#include "utils/json_cache.h"
+#include "utils/arc_json.h"
 
 
 typedef struct MTTargetRelLookup
@@ -1836,22 +1836,18 @@ lreplace:;
                 Oid attType = resultRelationDesc->rd_att->attrs[attno-1].atttypid;
                 Oid relid = slot->tts_tableOid;
 
-                PrimaryKeyInfo *keyAttnos; // 主键的列号数组
-                char *unique_key; // The key for the map of json cache
+                char *compositeKey = NULL;
 
                 // 114: JSON
                 if (attType != 114) {
                     break;
                 }
-                keyAttnos = get_primary_keys_att_no(relid);
-                unique_key = transform_primary_keys(relid, keyAttnos, slot);
-                if (unique_key != NULL) {
-                    delete_json_by_primary_key(unique_key); // todo:yyh 替换为delete_json_by_pk_and_attnum
+                compositeKey = get_composite_key(relid, slot, NULL, attno, Relid_Tuple_Attnum);
+                if (compositeKey != NULL) {
+                    delete_json(compositeKey, Relid_Tuple_Attnum);
                 }
-                if (keyAttnos != NULL)
-                    free(keyAttnos);
-                if (unique_key != NULL)
-                    pfree(unique_key);
+                if (compositeKey != NULL)
+                    pfree(compositeKey);
                 break;
             }
 
@@ -2624,19 +2620,16 @@ ExecModifyTable(PlanState *pstate)
             {
                 // note:yyh 删除JSON(整行)
                 Oid relid =  resultRelInfo->ri_RelationDesc->rd_id;
-                PrimaryKeyInfo *keyAttnos; // 主键的列号数组
-                char *unique_key; // The key for the map of json cache
 
-                keyAttnos = get_primary_keys_att_no(relid);
-                unique_key = transform_primary_keys(relid, keyAttnos, subplanstate->ps_ExprContext->ecxt_scantuple);
+                char *compositeKey = NULL;
 
-                if (unique_key != NULL) {
-                    delete_json_by_primary_key(unique_key);
+                compositeKey = get_composite_key(relid, slot, NULL, 0, Relid_Tuple);
+
+                if (compositeKey != NULL) {
+                    delete_json(compositeKey, Relid_Tuple);
                 }
-                if (keyAttnos != NULL)
-                    free(keyAttnos);
-                if (unique_key != NULL)
-                    pfree(unique_key);
+                if (compositeKey != NULL)
+                    pfree(compositeKey);
 
                 slot = ExecDelete(node, resultRelInfo, tupleid, oldtuple,
                                   planSlot, &node->mt_epqstate, estate,

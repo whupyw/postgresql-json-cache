@@ -26,6 +26,7 @@
 #include "tcop/utility.h"
 #include "utils/memutils.h"
 #include "utils/snapmgr.h"
+#include "utils/arc_json.h"
 
 
 /*
@@ -919,6 +920,8 @@ PortalRunSelect(Portal portal,
 			// NoteCN: 这个函数负责执行查询计划。它会遍历查询计划并执行相应的操作。
 			ExecutorRun(queryDesc, direction, (uint64) count,
 						portal->run_once);
+            // yyh:输出日志
+            print_hit_rate();
 			nprocessed = queryDesc->estate->es_processed;
 			PopActiveSnapshot();
 		}

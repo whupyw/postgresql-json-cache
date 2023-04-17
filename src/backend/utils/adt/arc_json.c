@@ -13,7 +13,7 @@ struct JSON_CACHE_PTR *json_map_head = NULL;
 const double t_b_total = 1000.0; // c
 double t1_cap = 0.0; // p
 
-uint json_hit_count, json_get_count;
+uint json_hit_count = 0, json_get_count = 0;
 
 void init_arc_lists(void) {
     init_specific_list(&t1);
@@ -41,19 +41,16 @@ enum HitCase get_json_data(char *compositeKey, text **result) {
     if (node == NULL) {
         if (t1->length + b1->length == t_b_total) {
             if (t1->length < t_b_total) {
-                HASH_DEL(json_map_head, b1->tail);
-                free(remove_from_list(b1->tail));
+                delete_from_list_and_free(b1->tail);
                 replace(false);
             } else {
-                HASH_DEL(json_map_head, t1->tail);
-                free(remove_from_list(t1->tail));
+                delete_from_list_and_free(t1->tail);
             }
         } else {
             double listSize = t1->length + t2->length + b1->length + b2->length;
             if (listSize >= t_b_total) {
                 if (listSize == t_b_total * 2) {
-                    HASH_DEL(json_map_head, b2->tail);
-                    free(remove_from_list(b2->tail));
+                    delete_from_list_and_free(b2->tail);
                 }
                 replace(false);
             }
@@ -166,4 +163,42 @@ void replace(bool in_b2) {
         free(t2->tail->json_value);
         move_to_mru(t2->tail, B2);
     }
+}
+
+// @Return: next node of the one to be deleted
+struct JSON_CACHE_PTR *delete_from_list_and_free(struct JSON_CACHE_PTR *node) {
+    struct JSON_CACHE_PTR *returnVal = node->next;
+    HASH_DEL(json_map_head, node);
+    free(remove_from_list(node));
+    return returnVal;
+}
+
+extern void delete_json(char *key, enum KeyType keyType) {
+    struct JSON_ARC_LIST *listArr[4] = {t1, t2, b1, b2};
+    // 未初始化缓存系统
+    if (t1 == NULL || t2 == NULL || b1 == NULL || b2 == NULL)
+        return;
+    // 这种情况对JSON是不存在的? 因为不能删除或更新单个Key, 如果JSONB可以？
+    if (keyType == Relid_Tuple_Attnum_Path) {
+        return;
+    }
+    for (int i = 0; i < 4; i++) {
+        if (listArr[i] == NULL)
+            return;
+        for (struct JSON_CACHE_PTR *node = listArr[i]->head; node != NULL;) {
+            if (strncmp(key, node->composite_key, strlen(key)) != 0) {
+                node = node->next;
+                continue;
+            }
+            node = delete_from_list_and_free(node);
+        }
+    }
+}
+
+extern void print_hit_rate(void) {
+    ereport(LOG,
+            (errmsg("get_count: %u, hit_count: %u",
+                    json_get_count, json_hit_count)));
+//    json_hit_count = 0;
+//    json_get_count = 0;
 }

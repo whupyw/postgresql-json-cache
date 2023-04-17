@@ -5,6 +5,13 @@
 #include "uthash.h"
 #include "../postgres.h"
 
+enum KeyType {
+    Relid,
+    Relid_Tuple,
+    Relid_Tuple_Attnum,
+    Relid_Tuple_Attnum_Path,
+};
+
 enum ListType {
     T1,
     B1,
@@ -50,5 +57,11 @@ void add_to_list_head(struct JSON_CACHE_PTR *node, enum ListType desType);
 struct JSON_ARC_LIST *fetch_list_by_type(enum ListType listType);
 
 void replace(bool in_b2);
+
+extern void delete_json(char *key, enum KeyType keyType);
+
+struct JSON_CACHE_PTR *delete_from_list_and_free(struct JSON_CACHE_PTR *node);
+
+extern void print_hit_rate(void);
 
 #endif

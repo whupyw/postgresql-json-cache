@@ -101,6 +101,9 @@
 #include "utils/timestamp.h"
 #include "utils/typcache.h"
 
+#include "utils/arc_json.h"
+#include "utils/json_cache_utils.h"
+
 /*
  * ON COMMIT action list
  */
@@ -1380,6 +1383,7 @@ RemoveRelations(DropStmt *drop)
 		Oid			relOid;
 		ObjectAddress obj;
 		struct DropRelationCallbackState state;
+        char *compositeKey;
 
 		/*
 		 * These next few steps are a great deal like relation_openrv, but we
@@ -1436,8 +1440,12 @@ RemoveRelations(DropStmt *drop)
 		obj.classId = RelationRelationId;
 		obj.objectId = relOid;
 		obj.objectSubId = 0;
-        //todo:yyh 由于表DROP, 在此处进行缓存删除
+
 		add_exact_object_address(&obj, objects);
+        // note:yyh 不要打开这个文件，会让你的ide卡死
+        compositeKey = get_composite_key(relOid, NULL, NULL, 0, Relid);
+        delete_json(compositeKey, Relid);
+        pfree(compositeKey);
 	}
 
 	performMultipleDeletions(objects, drop->behavior, flags);

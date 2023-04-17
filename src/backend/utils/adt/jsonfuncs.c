@@ -829,18 +829,16 @@ json_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid 
     char *compositeKey = NULL; // The key for the map of json cache
     enum HitCase hitCase;
 
-    compositeKey = get_composite_key(relid, slot, fnamestr, attNum);
+    compositeKey = get_composite_key(relid, slot, fnamestr, attNum, Relid_Tuple_Attnum_Path);
 
     if (compositeKey != NULL)
         hitCase = get_json_data(compositeKey, &result);
 
     if (result == NULL) {
-        // note:yyh 在 get_worker 内 parse
         result = get_worker(json, &fnamestr, NULL, 1, false);
         // 加入缓存
-        if (result != NULL && compositeKey != NULL) {
+        if (result != NULL && compositeKey != NULL)
             insert_json_data(compositeKey, result, hitCase);
-        }
     }
 
     if (compositeKey != NULL)
@@ -878,29 +876,32 @@ extern Datum
 jsonb_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int attNum) {
     Jsonb	   *jb = PG_GETARG_JSONB_P(0);
     text	   *key = PG_GETARG_TEXT_PP(1);
-    char       *fnamestr = text_to_cstring(key);
     JsonbValue *v = NULL;
     JsonbValue	vbuf;
 
+    char *fnamestr = text_to_cstring(key);
     char *compositeKey = NULL; // The key for the map of json cache
     enum JsonbHitCase hitCase;
 
     if (!JB_ROOT_IS_OBJECT(jb))
         PG_RETURN_NULL();
 
-    compositeKey = get_composite_key(relid, slot, fnamestr, attNum);
+    compositeKey = get_composite_key(relid, slot, fnamestr, attNum, Relid_Tuple_Attnum_Path);
 
     if (compositeKey != NULL)
         hitCase = get_jsonb_data(compositeKey, &v);
 
     if (v == NULL) {
         v = getKeyJsonValueFromContainer(&jb->root, VARDATA_ANY(key), VARSIZE_ANY_EXHDR(key), &vbuf);
+
         if (v != NULL && compositeKey != NULL)
             insert_jsonb_data(compositeKey, v, hitCase);
     }
 
     if (compositeKey != NULL)
         pfree(compositeKey);
+    if (fnamestr != NULL)
+        pfree(fnamestr);
 
     // note:yyh We get 'v' as our result
     if (v != NULL)
@@ -925,6 +926,38 @@ json_object_field_text(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 }
 
+extern Datum
+json_object_field_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int attNum) {
+    text	   *json = PG_GETARG_TEXT_PP(0);
+    text	   *fname = PG_GETARG_TEXT_PP(1);
+    char	   *fnamestr = text_to_cstring(fname);
+    text	   *result = NULL;
+
+    char *compositeKey = NULL; // The key for the map of json cache
+    enum HitCase hitCase;
+
+    compositeKey = get_composite_key(relid, slot, fnamestr, attNum, Relid_Tuple_Attnum_Path);
+
+    if (compositeKey != NULL)
+        hitCase = get_json_data(compositeKey, &result);
+
+    if (result == NULL) {
+        result = get_worker(json, &fnamestr, NULL, 1, true);
+        // 加入缓存
+        if (result != NULL && compositeKey != NULL) {
+            insert_json_data(compositeKey, result, hitCase);
+        }
+    }
+
+    if (compositeKey != NULL)
+        pfree(compositeKey);
+
+    if (result != NULL)
+        PG_RETURN_TEXT_P(result);
+    else
+        PG_RETURN_NULL();
+}
+
 Datum
 jsonb_object_field_text(PG_FUNCTION_ARGS)
 {
@@ -947,6 +980,44 @@ jsonb_object_field_text(PG_FUNCTION_ARGS)
 	PG_RETURN_NULL();
 }
 
+extern Datum
+jsonb_object_field_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int attNum) {
+    Jsonb	   *jb = PG_GETARG_JSONB_P(0);
+    text	   *key = PG_GETARG_TEXT_PP(1);
+    JsonbValue *v = NULL;
+    JsonbValue	vbuf;
+
+    char *fnamestr = text_to_cstring(key);
+    char *compositeKey = NULL; // The key for the map of json cache
+    enum JsonbHitCase hitCase;
+
+    if (!JB_ROOT_IS_OBJECT(jb))
+        PG_RETURN_NULL();
+
+    compositeKey = get_composite_key(relid, slot, fnamestr, attNum, Relid_Tuple_Attnum_Path);
+
+    if (compositeKey != NULL)
+        hitCase = get_jsonb_data(compositeKey, &v);
+
+    if (v == NULL) {
+        v = getKeyJsonValueFromContainer(&jb->root, VARDATA_ANY(key), VARSIZE_ANY_EXHDR(key), &vbuf);
+
+        if (v != NULL && compositeKey != NULL)
+            insert_jsonb_data(compositeKey, v, hitCase);
+    }
+
+    if (compositeKey != NULL)
+        pfree(compositeKey);
+
+    if (fnamestr != NULL)
+        pfree(fnamestr);
+
+    if (v != NULL && v->type != jbvNull)
+        PG_RETURN_TEXT_P(JsonbValueAsText(v));
+
+    PG_RETURN_NULL();
+}
+
 Datum
 json_array_element(PG_FUNCTION_ARGS)
 {
@@ -960,6 +1031,41 @@ json_array_element(PG_FUNCTION_ARGS)
 		PG_RETURN_TEXT_P(result);
 	else
 		PG_RETURN_NULL();
+}
+
+extern Datum
+json_array_element_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int attNum) {
+    text	   *json = PG_GETARG_TEXT_PP(0);
+    int			element = PG_GETARG_INT32(1);
+    text	   *result = NULL;
+
+    char *eleStr = psprintf("%d", element);
+
+    char *compositeKey = NULL; // The key for the map of json cache
+    enum HitCase hitCase;
+
+    compositeKey = get_composite_key(relid, slot, eleStr, attNum, Relid_Tuple_Attnum_Path);
+
+    if (compositeKey != NULL)
+        hitCase = get_json_data(compositeKey, &result);
+
+    if (result == NULL) {
+        result = get_worker(json, NULL, &element, 1, false);
+
+        if (result != NULL && compositeKey != NULL)
+            insert_json_data(compositeKey, result, hitCase);
+    }
+
+    if (eleStr != NULL)
+        pfree(eleStr);
+
+    if (compositeKey != NULL)
+        pfree(compositeKey);
+
+    if (result != NULL)
+        PG_RETURN_TEXT_P(result);
+    else
+        PG_RETURN_NULL();
 }
 
 Datum
@@ -990,6 +1096,55 @@ jsonb_array_element(PG_FUNCTION_ARGS)
 	PG_RETURN_NULL();
 }
 
+extern Datum
+jsonb_array_element_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int attNum) {
+    Jsonb	   *jb = PG_GETARG_JSONB_P(0);
+    int			element = PG_GETARG_INT32(1);
+    JsonbValue *v = NULL;
+
+    char *eleStr;
+    char *compositeKey = NULL; // The key for the map of json cache
+    enum JsonbHitCase hitCase;
+
+    if (!JB_ROOT_IS_ARRAY(jb))
+        PG_RETURN_NULL();
+
+    /* Handle negative subscript */
+    if (element < 0)
+    {
+        uint32		nelements = JB_ROOT_COUNT(jb);
+
+        if (-element > nelements)
+            PG_RETURN_NULL();
+        else
+            element += nelements;
+    }
+
+    eleStr = psprintf("%d", element);
+
+    compositeKey = get_composite_key(relid, slot, eleStr, attNum, Relid_Tuple_Attnum_Path);
+
+    if (compositeKey != NULL)
+        hitCase = get_jsonb_data(compositeKey, &v);
+
+    if (v == NULL) {
+        v = getIthJsonbValueFromContainer(&jb->root, element);
+
+        if (v != NULL && compositeKey != NULL)
+            insert_jsonb_data(compositeKey, v, hitCase);
+    }
+
+    if (eleStr != NULL)
+        pfree(eleStr);
+    if (compositeKey != NULL)
+        pfree(compositeKey);
+
+    if (v != NULL)
+        PG_RETURN_JSONB_P(JsonbValueToJsonb(v));
+
+    PG_RETURN_NULL();
+}
+
 Datum
 json_array_element_text(PG_FUNCTION_ARGS)
 {
@@ -1003,6 +1158,41 @@ json_array_element_text(PG_FUNCTION_ARGS)
 		PG_RETURN_TEXT_P(result);
 	else
 		PG_RETURN_NULL();
+}
+
+extern Datum
+json_array_element_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int attNum) {
+    text	   *json = PG_GETARG_TEXT_PP(0);
+    int			element = PG_GETARG_INT32(1);
+    text	   *result = NULL;
+
+    char *eleStr = psprintf("%d", element);
+
+    char *compositeKey = NULL; // The key for the map of json cache
+    enum HitCase hitCase;
+
+    compositeKey = get_composite_key(relid, slot, eleStr, attNum, Relid_Tuple_Attnum_Path);
+
+    if (compositeKey != NULL)
+        hitCase = get_json_data(compositeKey, &result);
+
+    if (result == NULL) {
+        result = get_worker(json, NULL, &element, 1, true);
+
+        if (result != NULL && compositeKey != NULL)
+            insert_json_data(compositeKey, result, hitCase);
+    }
+
+    if (eleStr != NULL)
+        pfree(eleStr);
+
+    if (compositeKey != NULL)
+        pfree(compositeKey);
+
+    if (result != NULL)
+        PG_RETURN_TEXT_P(result);
+    else
+        PG_RETURN_NULL();
 }
 
 Datum
@@ -1032,6 +1222,55 @@ jsonb_array_element_text(PG_FUNCTION_ARGS)
 		PG_RETURN_TEXT_P(JsonbValueAsText(v));
 
 	PG_RETURN_NULL();
+}
+
+extern Datum
+jsonb_array_element_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int attNum) {
+    Jsonb	   *jb = PG_GETARG_JSONB_P(0);
+    int			element = PG_GETARG_INT32(1);
+    JsonbValue *v = NULL;
+
+    char *eleStr;
+    char *compositeKey = NULL; // The key for the map of json cache
+    enum JsonbHitCase hitCase;
+
+    if (!JB_ROOT_IS_ARRAY(jb))
+        PG_RETURN_NULL();
+
+    /* Handle negative subscript */
+    if (element < 0)
+    {
+        uint32		nelements = JB_ROOT_COUNT(jb);
+
+        if (-element > nelements)
+            PG_RETURN_NULL();
+        else
+            element += nelements;
+    }
+
+    eleStr = psprintf("%d", element);
+
+    compositeKey = get_composite_key(relid, slot, eleStr, attNum, Relid_Tuple_Attnum_Path);
+
+    if (compositeKey != NULL)
+        hitCase = get_jsonb_data(compositeKey, &v);
+
+    if (v == NULL) {
+        v = getIthJsonbValueFromContainer(&jb->root, element);
+
+        if (v != NULL && v->type != jbvNull && compositeKey != NULL)
+            insert_jsonb_data(compositeKey, v, hitCase);
+    }
+
+    if (eleStr != NULL)
+        pfree(eleStr);
+    if (compositeKey != NULL)
+        pfree(compositeKey);
+
+    if (v != NULL && v->type != jbvNull)
+        PG_RETURN_TEXT_P(JsonbValueAsText(v));
+
+    PG_RETURN_NULL();
 }
 
 Datum
@@ -1140,8 +1379,6 @@ get_worker(text *json,
 	JsonSemAction *sem = palloc0(sizeof(JsonSemAction)); // 动态分配一块内存，用于存储json的语义操作信息。
 	GetState   *state = palloc0(sizeof(GetState)); // 动态分配一块内存，用于存储json解析的相关状态。
 
-    char **testPath = tpath;
-
 	Assert(npath >= 0);
 
 	state->lex = lex;
@@ -1155,15 +1392,6 @@ get_worker(text *json,
 
 	if (npath > 0)
 		state->pathok[0] = true;
-
-    // 测试代码
-
-    for (int i = 0; ; i++) {
-        char *str = testPath[i];
-        if (str == NULL)
-            break;
-        printf("%s\n", str);
-    }
 
 	sem->semstate = (void *) state;
 
