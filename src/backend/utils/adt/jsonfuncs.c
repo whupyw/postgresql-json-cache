@@ -826,23 +826,48 @@ json_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid 
     char *fnamestr = text_to_cstring(fname);
     text *result = NULL;
 
-    char *compositeKey = NULL; // The key for the map of json cache
+    StringInfo compositeKey = NULL; // The key for the map of json cache
     enum HitCase hitCase;
+
+    clock_t start, end;
+    double cpu_time_used;
+
+    start = clock();
 
     compositeKey = get_composite_key(relid, slot, fnamestr, attNum, Relid_Tuple_Attnum_Path);
 
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("Time used of get compositeKey: %f seconds\n", cpu_time_used);
+
+    start = clock();
     if (compositeKey != NULL)
-        hitCase = get_json_data(compositeKey, &result);
+        hitCase = get_json_data(compositeKey->data, &result);
+
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("Time used of get from cache: %f seconds\n", cpu_time_used);
 
     if (result == NULL) {
+        start = clock();
         result = get_worker(json, &fnamestr, NULL, 1, false);
+        end = clock();
+        cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+        printf("Time used of parse json: %f seconds\n", cpu_time_used);
         // 加入缓存
-        if (result != NULL && compositeKey != NULL)
-            insert_json_data(compositeKey, result, hitCase);
+        if (compositeKey != NULL) {
+            start = clock();
+            insert_json_data(compositeKey->data, result, hitCase);
+            end = clock();
+            cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+            printf("Time used of insert cache: %f seconds\n", cpu_time_used);
+        }
     }
 
-    if (compositeKey != NULL)
+    if (compositeKey != NULL) {
+        pfree(compositeKey->data);
         pfree(compositeKey);
+    }
 
     if (result != NULL)
         PG_RETURN_TEXT_P(result);
@@ -880,26 +905,36 @@ jsonb_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid
     JsonbValue	vbuf;
 
     char *fnamestr = text_to_cstring(key);
-    char *compositeKey = NULL; // The key for the map of json cache
+    StringInfo compositeKey = NULL; // The key for the map of json cache
     enum JsonbHitCase hitCase;
+
+    clock_t start, end;
+    double cpu_time_used;
 
     if (!JB_ROOT_IS_OBJECT(jb))
         PG_RETURN_NULL();
 
     compositeKey = get_composite_key(relid, slot, fnamestr, attNum, Relid_Tuple_Attnum_Path);
 
+    start = clock();
     if (compositeKey != NULL)
-        hitCase = get_jsonb_data(compositeKey, &v);
+        hitCase = get_jsonb_data(compositeKey->data, &v);
+
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC; // 计算消耗时间
+    printf("Time used of get from cache: %f seconds\n", cpu_time_used);
 
     if (v == NULL) {
         v = getKeyJsonValueFromContainer(&jb->root, VARDATA_ANY(key), VARSIZE_ANY_EXHDR(key), &vbuf);
 
         if (v != NULL && compositeKey != NULL)
-            insert_jsonb_data(compositeKey, v, hitCase);
+            insert_jsonb_data(compositeKey->data, v, hitCase);
     }
 
-    if (compositeKey != NULL)
+    if (compositeKey != NULL) {
+        pfree(compositeKey->data);
         pfree(compositeKey);
+    }
     if (fnamestr != NULL)
         pfree(fnamestr);
 
@@ -933,24 +968,26 @@ json_object_field_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot,
     char	   *fnamestr = text_to_cstring(fname);
     text	   *result = NULL;
 
-    char *compositeKey = NULL; // The key for the map of json cache
+    StringInfo compositeKey = NULL; // The key for the map of json cache
     enum HitCase hitCase;
 
     compositeKey = get_composite_key(relid, slot, fnamestr, attNum, Relid_Tuple_Attnum_Path);
 
     if (compositeKey != NULL)
-        hitCase = get_json_data(compositeKey, &result);
+        hitCase = get_json_data(compositeKey->data, &result);
 
     if (result == NULL) {
         result = get_worker(json, &fnamestr, NULL, 1, true);
         // 加入缓存
-        if (result != NULL && compositeKey != NULL) {
-            insert_json_data(compositeKey, result, hitCase);
+        if (compositeKey != NULL) {
+            insert_json_data(compositeKey->data, result, hitCase);
         }
     }
 
-    if (compositeKey != NULL)
+    if (compositeKey != NULL) {
+        pfree(compositeKey->data);
         pfree(compositeKey);
+    }
 
     if (result != NULL)
         PG_RETURN_TEXT_P(result);
@@ -988,7 +1025,7 @@ jsonb_object_field_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot
     JsonbValue	vbuf;
 
     char *fnamestr = text_to_cstring(key);
-    char *compositeKey = NULL; // The key for the map of json cache
+    StringInfo compositeKey = NULL; // The key for the map of json cache
     enum JsonbHitCase hitCase;
 
     if (!JB_ROOT_IS_OBJECT(jb))
@@ -997,17 +1034,19 @@ jsonb_object_field_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot
     compositeKey = get_composite_key(relid, slot, fnamestr, attNum, Relid_Tuple_Attnum_Path);
 
     if (compositeKey != NULL)
-        hitCase = get_jsonb_data(compositeKey, &v);
+        hitCase = get_jsonb_data(compositeKey->data, &v);
 
     if (v == NULL) {
         v = getKeyJsonValueFromContainer(&jb->root, VARDATA_ANY(key), VARSIZE_ANY_EXHDR(key), &vbuf);
 
         if (v != NULL && compositeKey != NULL)
-            insert_jsonb_data(compositeKey, v, hitCase);
+            insert_jsonb_data(compositeKey->data, v, hitCase);
     }
 
-    if (compositeKey != NULL)
+    if (compositeKey != NULL) {
+        pfree(compositeKey->data);
         pfree(compositeKey);
+    }
 
     if (fnamestr != NULL)
         pfree(fnamestr);
@@ -1041,26 +1080,28 @@ json_array_element_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid
 
     char *eleStr = psprintf("%d", element);
 
-    char *compositeKey = NULL; // The key for the map of json cache
+    StringInfo compositeKey = NULL; // The key for the map of json cache
     enum HitCase hitCase;
 
     compositeKey = get_composite_key(relid, slot, eleStr, attNum, Relid_Tuple_Attnum_Path);
 
     if (compositeKey != NULL)
-        hitCase = get_json_data(compositeKey, &result);
+        hitCase = get_json_data(compositeKey->data, &result);
 
     if (result == NULL) {
         result = get_worker(json, NULL, &element, 1, false);
 
-        if (result != NULL && compositeKey != NULL)
-            insert_json_data(compositeKey, result, hitCase);
+        if (compositeKey != NULL)
+            insert_json_data(compositeKey->data, result, hitCase);
     }
 
     if (eleStr != NULL)
         pfree(eleStr);
 
-    if (compositeKey != NULL)
+    if (compositeKey != NULL) {
+        pfree(compositeKey->data);
         pfree(compositeKey);
+    }
 
     if (result != NULL)
         PG_RETURN_TEXT_P(result);
@@ -1103,7 +1144,7 @@ jsonb_array_element_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oi
     JsonbValue *v = NULL;
 
     char *eleStr;
-    char *compositeKey = NULL; // The key for the map of json cache
+    StringInfo compositeKey = NULL; // The key for the map of json cache
     enum JsonbHitCase hitCase;
 
     if (!JB_ROOT_IS_ARRAY(jb))
@@ -1125,19 +1166,22 @@ jsonb_array_element_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oi
     compositeKey = get_composite_key(relid, slot, eleStr, attNum, Relid_Tuple_Attnum_Path);
 
     if (compositeKey != NULL)
-        hitCase = get_jsonb_data(compositeKey, &v);
+        hitCase = get_jsonb_data(compositeKey->data, &v);
 
     if (v == NULL) {
         v = getIthJsonbValueFromContainer(&jb->root, element);
 
         if (v != NULL && compositeKey != NULL)
-            insert_jsonb_data(compositeKey, v, hitCase);
+            insert_jsonb_data(compositeKey->data, v, hitCase);
     }
 
     if (eleStr != NULL)
         pfree(eleStr);
-    if (compositeKey != NULL)
+
+    if (compositeKey != NULL) {
+        pfree(compositeKey->data);
         pfree(compositeKey);
+    }
 
     if (v != NULL)
         PG_RETURN_JSONB_P(JsonbValueToJsonb(v));
@@ -1168,26 +1212,28 @@ json_array_element_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot
 
     char *eleStr = psprintf("%d", element);
 
-    char *compositeKey = NULL; // The key for the map of json cache
+    StringInfo compositeKey = NULL; // The key for the map of json cache
     enum HitCase hitCase;
 
     compositeKey = get_composite_key(relid, slot, eleStr, attNum, Relid_Tuple_Attnum_Path);
 
     if (compositeKey != NULL)
-        hitCase = get_json_data(compositeKey, &result);
+        hitCase = get_json_data(compositeKey->data, &result);
 
     if (result == NULL) {
         result = get_worker(json, NULL, &element, 1, true);
 
-        if (result != NULL && compositeKey != NULL)
-            insert_json_data(compositeKey, result, hitCase);
+        if (compositeKey != NULL)
+            insert_json_data(compositeKey->data, result, hitCase);
     }
 
     if (eleStr != NULL)
         pfree(eleStr);
 
-    if (compositeKey != NULL)
+    if (compositeKey != NULL) {
+        pfree(compositeKey->data);
         pfree(compositeKey);
+    }
 
     if (result != NULL)
         PG_RETURN_TEXT_P(result);
@@ -1231,7 +1277,7 @@ jsonb_array_element_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slo
     JsonbValue *v = NULL;
 
     char *eleStr;
-    char *compositeKey = NULL; // The key for the map of json cache
+    StringInfo compositeKey = NULL; // The key for the map of json cache
     enum JsonbHitCase hitCase;
 
     if (!JB_ROOT_IS_ARRAY(jb))
@@ -1253,19 +1299,22 @@ jsonb_array_element_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slo
     compositeKey = get_composite_key(relid, slot, eleStr, attNum, Relid_Tuple_Attnum_Path);
 
     if (compositeKey != NULL)
-        hitCase = get_jsonb_data(compositeKey, &v);
+        hitCase = get_jsonb_data(compositeKey->data, &v);
 
     if (v == NULL) {
         v = getIthJsonbValueFromContainer(&jb->root, element);
 
         if (v != NULL && v->type != jbvNull && compositeKey != NULL)
-            insert_jsonb_data(compositeKey, v, hitCase);
+            insert_jsonb_data(compositeKey->data, v, hitCase);
     }
 
     if (eleStr != NULL)
         pfree(eleStr);
-    if (compositeKey != NULL)
+
+    if (compositeKey != NULL) {
+        pfree(compositeKey->data);
         pfree(compositeKey);
+    }
 
     if (v != NULL && v->type != jbvNull)
         PG_RETURN_TEXT_P(JsonbValueAsText(v));

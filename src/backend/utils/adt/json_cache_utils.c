@@ -1,6 +1,8 @@
+#include <time.h>
+#include <bits/time.h>
 #include "utils/json_cache_utils.h"
 
-char *path; // 存储path(12->address->postcode)
+StringInfo path = NULL; // 存储path(12->address->postcode)
 
 /*
  * transform_primary_keys
@@ -10,9 +12,9 @@ char *path; // 存储path(12->address->postcode)
  * @param slot 正在扫描的元组
  * @return 标识一个JSON类型属性的key, tableOid_pkAttNum1:pkVal1&pkAttNum2:pkVal2...pkAttNumK:pkValK
  */
-extern char *transform_primary_keys(Oid relid, PrimaryKeyInfo *pkinfo, TupleTableSlot *slot) {
+extern StringInfo transform_primary_keys(Oid relid, PrimaryKeyInfo *pkinfo, TupleTableSlot *slot) {
 
-    char *result = NULL;
+    StringInfo result = NULL;
     uint relidUint = (unsigned int) relid;
 
     if (pkinfo == NULL || pkinfo->nkeys == 0)
@@ -23,7 +25,6 @@ extern char *transform_primary_keys(Oid relid, PrimaryKeyInfo *pkinfo, TupleTabl
         bool   isnull;
         int  key_index;
         int32  key_value;
-        char *new_result;
 
         key_index = (int) pkinfo->keyAttno[i];
 
@@ -36,11 +37,10 @@ extern char *transform_primary_keys(Oid relid, PrimaryKeyInfo *pkinfo, TupleTabl
         key_value = DatumGetInt32(value); // todo:yyh 临时方案, 需要switch语句判断类型
 
         if (result == NULL) {
-            result = psprintf("%u_%d:%d", relidUint, key_index, key_value);
+            result = makeStringInfo();
+            appendStringInfo(result, "%u_%d:%d", relidUint, key_index, key_value);
         } else {
-            new_result = psprintf("%s&%d:%d", result, key_index, key_value);
-            pfree(result);
-            result = new_result;
+            appendStringInfo(result, "&%d:%d", key_index, key_value);
         }
     }
 
@@ -116,51 +116,70 @@ extern PrimaryKeyInfo *get_primary_keys_att_no(Oid relid) {
 }
 
 // 121_3:12&4:12_3->address->postcode
-extern char * get_composite_key(Oid relid, TupleTableSlot *slot, char *name, int attNum, enum KeyType keyType) {
-//    StringInfo compositeKey = NULL;
-    char *primaryKey = NULL; // The key for the map of json cache
-    char *compositeKey = NULL;
+extern StringInfo get_composite_key(Oid relid, TupleTableSlot *slot, char *name, int attNum, enum KeyType keyType) {
+
+    StringInfo compositeKey = NULL;
     PrimaryKeyInfo *keyAttnos = NULL; // 主键的列号数组
+    clock_t start, end;
+    double cpu_time_used;
 
     if (keyType == Relid) {
-        compositeKey = psprintf("%u", (unsigned int) relid);
+        compositeKey = makeStringInfo();
+        appendStringInfo(compositeKey, "%u", (unsigned int) relid);
         return compositeKey;
     }
 
+    start = clock();
+
     keyAttnos = get_primary_keys_att_no(relid);
+
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("Time used of get compositeKey: %f seconds\n", cpu_time_used);
 
     if (keyAttnos == NULL)
         return NULL;
 
-    primaryKey = transform_primary_keys(relid, keyAttnos, slot);
+    start = clock();
+
+    compositeKey = transform_primary_keys(relid, keyAttnos, slot);
+
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("Time used of get compositeKey: %f seconds\n", cpu_time_used);
 
     free(keyAttnos);
 
-    if (primaryKey == NULL || keyType == Relid_Tuple)
-        return primaryKey;
+    if (compositeKey == NULL || keyType == Relid_Tuple)
+        return compositeKey;
 
     if (keyType == Relid_Tuple_Attnum) {
-        compositeKey = psprintf("%s_%d", primaryKey, attNum);
+        appendStringInfo(compositeKey, "_%d", attNum);
         return compositeKey;
     }
 
+    start = clock();
+
     if (path == NULL) {
-        appendStringInfo(result, "%d->%s", attNum, name);
+        path = makeStringInfo();
+        appendStringInfo(path, "%d->%s", attNum, name);
     } else {
-        char *newStr = psprintf("%s->%s", path, name);
-        pfree(path);
-        path = newStr;
+        appendStringInfo(path, "->%s", name);
     }
 
-    compositeKey = psprintf("%s_%s", primaryKey, path);
-    pfree(primaryKey);
+    appendStringInfo(compositeKey, "_%s", path->data);
+
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("Time used of get compositeKey: %f seconds\n", cpu_time_used);
 
     return compositeKey;
 }
 
 extern void free_path(void) {
-    if (path != NULL) {
-        pfree(path);
-        path = NULL;
-    }
+    if (path == NULL)
+        return;
+    pfree(path->data);
+    pfree(path);
+    path = NULL;
 }

@@ -51,4 +51,10 @@ struct JSONB_ARC_LIST *jsonb_fetch_list_by_type(enum JsonbListType listType);
 
 void jsonb_replace(bool in_b2);
 
+struct JSONB_CACHE_PTR *jsonb_delete_from_list_and_free(struct JSONB_CACHE_PTR *node);
+
+void jsonb_free_node(struct JSONB_CACHE_PTR *node);
+
+extern void delete_jsonb(void);
+
 #endif

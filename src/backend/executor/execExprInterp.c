@@ -781,7 +781,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
                     d = op->d.func.fn_addr(fcinfo);
             }
 
-            d = op->d.func.fn_addr(fcinfo);
+//            d = op->d.func.fn_addr(fcinfo);
 
 			*op->resvalue = d;
 			*op->resnull = fcinfo->isnull;
@@ -1834,7 +1834,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 		}
 	}
 
-out:
+out: // 不同的 id
     free_path();
 	*isnull = state->resnull;
 	return state->resvalue;

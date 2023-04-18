@@ -50,7 +50,7 @@ void init_specific_list(struct JSON_ARC_LIST **list);
 
 void move_to_mru(struct JSON_CACHE_PTR *node, enum ListType desType);
 
-struct JSON_CACHE_PTR * remove_from_list(struct JSON_CACHE_PTR *node);
+void remove_from_list(struct JSON_CACHE_PTR *node);
 
 void add_to_list_head(struct JSON_CACHE_PTR *node, enum ListType desType);
 
@@ -61,6 +61,8 @@ void replace(bool in_b2);
 extern void delete_json(char *key, enum KeyType keyType);
 
 struct JSON_CACHE_PTR *delete_from_list_and_free(struct JSON_CACHE_PTR *node);
+
+void free_node(struct JSON_CACHE_PTR *node);
 
 extern void print_hit_rate(void);
 

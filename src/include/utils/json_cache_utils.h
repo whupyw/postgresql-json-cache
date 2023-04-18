@@ -14,11 +14,14 @@ typedef struct KeyInfo {
     int16* keyAttno;
 } PrimaryKeyInfo;
 
+// 存储 primaryKeyInfo 的 Hash表
+
+
 extern PrimaryKeyInfo *get_primary_keys_att_no(Oid relid);
 
-extern char *transform_primary_keys(Oid relid, PrimaryKeyInfo *pkinfo, TupleTableSlot *slot);
+extern StringInfo transform_primary_keys(Oid relid, PrimaryKeyInfo *pkinfo, TupleTableSlot *slot);
 
-extern char * get_composite_key(Oid relid, TupleTableSlot *slot, char *name, int attNum, enum KeyType keyType);
+extern StringInfo get_composite_key(Oid relid, TupleTableSlot *slot, char *name, int attNum, enum KeyType keyType);
 
 extern void free_path(void);
 

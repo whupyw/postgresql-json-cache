@@ -10,7 +10,7 @@ struct JSON_ARC_LIST *b2 = NULL;
 
 struct JSON_CACHE_PTR *json_map_head = NULL;
 
-const double t_b_total = 1000.0; // c
+const double t_b_total = 1000; // c
 double t1_cap = 0.0; // p
 
 uint json_hit_count = 0, json_get_count = 0;
@@ -85,6 +85,7 @@ void insert_json_data(char *compositeKey, text *result, enum HitCase hitCase) {
     struct JSON_CACHE_PTR *node;
 
     if (hitCase == HitB) {
+        if (result == NULL) return; // 可以是空的
         t2->head->json_value = (text*) malloc(sizeof(text) + VARSIZE(result) - VARHDRSZ);
         memcpy(t2->head->json_value, result, sizeof(text) + VARSIZE(result) - VARHDRSZ);
         return;
@@ -95,8 +96,12 @@ void insert_json_data(char *compositeKey, text *result, enum HitCase hitCase) {
     node->composite_key = (char *) malloc(strlen(compositeKey) + 1);
     strcpy(node->composite_key, compositeKey);
     // node->json_value
-    node->json_value = (text*) malloc(sizeof(text) + VARSIZE(result) - VARHDRSZ);
-    memcpy(node->json_value, result, sizeof(text) + VARSIZE(result) - VARHDRSZ);
+    if (result == NULL) {
+        node->json_value = NULL;
+    } else {
+        node->json_value = (text*) malloc(sizeof(text) + VARSIZE(result) - VARHDRSZ);
+        memcpy(node->json_value, result, sizeof(text) + VARSIZE(result) - VARHDRSZ);
+    }
     // node->list_type
     node->list_type = T1;
     add_to_list_head(node, T1);
@@ -111,7 +116,7 @@ void move_to_mru(struct JSON_CACHE_PTR *node, enum ListType desType) {
     node->list_type = desType;
 }
 
-struct JSON_CACHE_PTR * remove_from_list(struct JSON_CACHE_PTR *node) {
+void remove_from_list(struct JSON_CACHE_PTR *node) {
     struct JSON_ARC_LIST *list = fetch_list_by_type(node->list_type);
     if (list->head == node && list->tail == node) {
         list->head = NULL;
@@ -127,7 +132,6 @@ struct JSON_CACHE_PTR * remove_from_list(struct JSON_CACHE_PTR *node) {
         node->next->prev = node->prev;
     }
     list->length--;
-    return node;
 }
 
 void add_to_list_head(struct JSON_CACHE_PTR *node, enum ListType desType) {
@@ -157,10 +161,12 @@ inline struct JSON_ARC_LIST *fetch_list_by_type(enum ListType listType) {
 // 把 T1/T2尾部的数据移动到B1/B2的头部
 void replace(bool in_b2) {
     if (t1->length != 0 && ((t1->length > t1_cap) || (in_b2 && t1->length == t1_cap))) {
-        free(t1->tail->json_value);
+        if (t1->tail->json_value != NULL)
+            free(t1->tail->json_value);
         move_to_mru(t1->tail, B1);
     } else {
-        free(t2->tail->json_value);
+        if (t2->tail->json_value != NULL)
+            free(t2->tail->json_value);
         move_to_mru(t2->tail, B2);
     }
 }
@@ -169,8 +175,16 @@ void replace(bool in_b2) {
 struct JSON_CACHE_PTR *delete_from_list_and_free(struct JSON_CACHE_PTR *node) {
     struct JSON_CACHE_PTR *returnVal = node->next;
     HASH_DEL(json_map_head, node);
-    free(remove_from_list(node));
+    remove_from_list(node);
+    free_node(node);
     return returnVal;
+}
+void free_node(struct JSON_CACHE_PTR *node) {
+    if (node->composite_key != NULL)
+        free(node->composite_key);
+    if (node->json_value != NULL)
+        free(node->json_value);
+    free(node);
 }
 
 extern void delete_json(char *key, enum KeyType keyType) {
