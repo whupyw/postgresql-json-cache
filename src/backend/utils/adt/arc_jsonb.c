@@ -13,7 +13,7 @@ struct JSONB_CACHE_PTR *jsonb_map_head = NULL;
 const double t_b_total_jsonb = 1000.0; // c
 double t1_cap_jsonb = 0.0; // p
 
-uint jsonb_hit_count, jsonb_get_count;
+uint jsonb_hit_count = 0, jsonb_get_count = 0, jsonb_phantom_hit_count = 0, jsonb_delete_count = 0;
 
 void jsonb_init_arc_lists(void) {
     jsonb_init_specific_list(&t1_jb);
@@ -29,7 +29,7 @@ void jsonb_init_specific_list(struct JSONB_ARC_LIST **list) {
     (*list)->length = 0;
 }
 
-enum JsonbHitCase get_jsonb_data(char *compositeKey, JsonbValue **result) {
+enum JsonbHitCase get_jsonb_data(char *compositeKey, int *result) {
     struct JSONB_CACHE_PTR *node;
     double extendSize;
     if (t1_jb == NULL) {
@@ -61,9 +61,10 @@ enum JsonbHitCase get_jsonb_data(char *compositeKey, JsonbValue **result) {
         case T2Jsonb:
             jsonb_move_to_mru(node, T2Jsonb);
             jsonb_hit_count++;
-            *result = node->jsonb_value;
+            *result = node->jsonb_index;
             return HitTJsonb;
         case B1Jsonb:
+            jsonb_phantom_hit_count++;
             extendSize = b1_jb->length >= b2_jb->length ? 1 : b2_jb->length / b1_jb->length;
             t1_cap_jsonb = min(t1_cap_jsonb + extendSize, t_b_total_jsonb);
             jsonb_replace(false);
@@ -71,6 +72,7 @@ enum JsonbHitCase get_jsonb_data(char *compositeKey, JsonbValue **result) {
             // parse 后 复制 result 到 t2_jb->head->json_value
             return HitBJsonb;
         case B2Jsonb:
+            jsonb_phantom_hit_count++;
             extendSize = b2_jb->length >= b1_jb->length ? 1 : b1_jb->length / b2_jb->length;
             t1_cap_jsonb = max(t1_cap_jsonb - extendSize, 0);
             jsonb_replace(true);
@@ -80,13 +82,11 @@ enum JsonbHitCase get_jsonb_data(char *compositeKey, JsonbValue **result) {
     }
 }
 
-void insert_jsonb_data(char *compositeKey, JsonbValue *result, enum JsonbHitCase hitCase) {
+void insert_jsonb_data(char *compositeKey, int result, enum JsonbHitCase hitCase) {
     struct JSONB_CACHE_PTR *node;
 
     if (hitCase == HitBJsonb) {
-        if (result == NULL) return;
-        t2_jb->head->jsonb_value = (JsonbValue *) malloc(sizeof(JsonbValue) + VARSIZE(result) - VARHDRSZ);
-        memcpy(t2_jb->head->jsonb_value, result, sizeof(JsonbValue) + VARSIZE(result) - VARHDRSZ);
+        t2_jb->head->jsonb_index = result;
         return;
     }
     // HitNone
@@ -95,8 +95,7 @@ void insert_jsonb_data(char *compositeKey, JsonbValue *result, enum JsonbHitCase
     node->composite_key = (char *) malloc(strlen(compositeKey) + 1);
     strcpy(node->composite_key, compositeKey);
     // node->json_value
-    node->jsonb_value = (JsonbValue *) malloc(sizeof(JsonbValue) + VARSIZE(result) - VARHDRSZ);
-    memcpy(node->jsonb_value, result, sizeof(JsonbValue) + VARSIZE(result) - VARHDRSZ);
+    node->jsonb_index = result;
     // node->list_type
     node->list_type = T1Jsonb;
     jsonb_add_to_list_head(node, T1Jsonb);
@@ -112,7 +111,7 @@ void jsonb_move_to_mru(struct JSONB_CACHE_PTR *node, enum JsonbListType desType)
     node->list_type = desType;
 }
 
-struct JSONB_CACHE_PTR * jsonb_remove_from_list(struct JSONB_CACHE_PTR *node) {
+void jsonb_remove_from_list(struct JSONB_CACHE_PTR *node) {
     struct JSONB_ARC_LIST *list = jsonb_fetch_list_by_type(node->list_type);
     if (list->head == node && list->tail == node) {
         list->head = NULL;
@@ -128,7 +127,6 @@ struct JSONB_CACHE_PTR * jsonb_remove_from_list(struct JSONB_CACHE_PTR *node) {
         node->next->prev = node->prev;
     }
     list->length--;
-    return node;
 }
 
 void jsonb_add_to_list_head(struct JSONB_CACHE_PTR *node, enum JsonbListType desType) {
@@ -158,12 +156,8 @@ inline struct JSONB_ARC_LIST *jsonb_fetch_list_by_type(enum JsonbListType listTy
 // 把 t1_jb/t2_jb尾部的数据移动到b1_jb/b2_jb的头部
 void jsonb_replace(bool in_b2_jb) {
     if (t1_jb->length != 0 && ((t1_jb->length > t1_cap_jsonb) || (in_b2_jb && t1_jb->length == t1_cap_jsonb))) {
-        if (t1_jb->tail->jsonb_value != NULL)
-            free(t1_jb->tail->jsonb_value);
         jsonb_move_to_mru(t1_jb->tail, B1Jsonb);
     } else {
-        if (t2_jb->tail->jsonb_value != NULL)
-            free(t2_jb->tail->jsonb_value);
         jsonb_move_to_mru(t2_jb->tail, B2Jsonb);
     }
 }
@@ -173,13 +167,19 @@ struct JSONB_CACHE_PTR *jsonb_delete_from_list_and_free(struct JSONB_CACHE_PTR *
     HASH_DEL(jsonb_map_head, node);
     jsonb_remove_from_list(node);
     jsonb_free_node(node);
+    jsonb_delete_count++;
     return returnVal;
 }
 
 void jsonb_free_node(struct JSONB_CACHE_PTR *node) {
     if (node->composite_key != NULL)
         free(node->composite_key);
-    if (node->jsonb_value != NULL)
-        free(node->jsonb_value);
     free(node);
+}
+
+extern void print_jsonb_hit_rate(void) {
+    ereport(LOG,
+            (errmsg("get_count: %u, hit_count: %u, phantom_hit_count: %u, delete_count: %u",
+                    jsonb_get_count, jsonb_hit_count,
+                    jsonb_phantom_hit_count, jsonb_delete_count)));
 }

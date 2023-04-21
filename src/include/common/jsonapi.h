@@ -127,6 +127,11 @@ typedef struct JsonSemAction
 extern JsonParseErrorType pg_parse_json(JsonLexContext *lex,
 										JsonSemAction *sem);
 
+extern JsonParseErrorType pg_parse_json_with_cache(JsonLexContext *lex,
+                                        JsonSemAction *sem, bool fastSearch);
+
+extern void setSavedParseInfoStatus(void);
+
 /* the null action object used for pure validation */
 extern JsonSemAction nullSemAction;
 

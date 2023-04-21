@@ -19,24 +19,20 @@
 #include "jsonb.h"
 #include <time.h>
 
-
-struct jsonb_data {
-    char *path_name; // jsonb 中的键
-    JsonbValue *value; // 存储 JsonbValue
-    time_t updateTime; // 更新时间， presentTime - updateTime >= expireTime, 删除数据
-    UT_hash_handle hh; /* makes this structure hashable */
+struct JSONB_INDEX_CACHE {
+    char *composite_key;
+    int jsonb_index;
+    struct JSONB_INDEX_CACHE *next;
+    struct JSONB_INDEX_CACHE *prev;
+    UT_hash_handle hh;
 };
 
-struct jsonb_cache {
-    char *primary_key;  // 唯一标识元组中的一个jsonb数据
-    struct jsonb_data *datas; // json_data 也是一个 map
-    UT_hash_handle hh; /* makes this structure hashable */
-};
+void insert_jsonb_index(char *compositeKey, int index);
 
-void add_jsonb_data(char *primaryKey, char *pathName, JsonbValue *value);
+int find_jsonb_index(char *compositeKey);
 
-JsonbValue *find_jsonb_data(char *primaryKey, char *pathName);
+void delete_lru(void);
 
-void delete_jsonb_by_primary_key(char *primaryKey);
+extern void print_jsonb_lru_hit_rate(void);
 
 #endif

@@ -26,16 +26,16 @@ struct JSONB_ARC_LIST {
 
 struct JSONB_CACHE_PTR {
     char *composite_key;
-    JsonbValue *jsonb_value;
+    int jsonb_index;
     enum JsonbListType list_type;
     struct JSONB_CACHE_PTR *next;
     struct JSONB_CACHE_PTR *prev;
     UT_hash_handle hh;
 };
 
-enum JsonbHitCase get_jsonb_data(char *compositeKey, JsonbValue **result);
+enum JsonbHitCase get_jsonb_data(char *compositeKey, int *result);
 
-void insert_jsonb_data(char *compositeKey, JsonbValue *result, enum JsonbHitCase hitCase);
+void insert_jsonb_data(char *compositeKey, int result, enum JsonbHitCase hitCase);
 
 void jsonb_init_arc_lists(void);
 
@@ -43,7 +43,7 @@ void jsonb_init_specific_list(struct JSONB_ARC_LIST **list);
 
 void jsonb_move_to_mru(struct JSONB_CACHE_PTR *node, enum JsonbListType desType);
 
-struct JSONB_CACHE_PTR *jsonb_remove_from_list(struct JSONB_CACHE_PTR *node);
+void jsonb_remove_from_list(struct JSONB_CACHE_PTR *node);
 
 void jsonb_add_to_list_head(struct JSONB_CACHE_PTR *node, enum JsonbListType desType);
 
@@ -56,5 +56,7 @@ struct JSONB_CACHE_PTR *jsonb_delete_from_list_and_free(struct JSONB_CACHE_PTR *
 void jsonb_free_node(struct JSONB_CACHE_PTR *node);
 
 extern void delete_jsonb(void);
+
+extern void print_jsonb_hit_rate(void);
 
 #endif

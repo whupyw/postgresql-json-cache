@@ -34,6 +34,8 @@
 #define json_log_and_abort(...) elog(ERROR, __VA_ARGS__)
 #endif
 
+bool savedParseInfoStatus = false;
+
 /*
  * The context of the parser is maintained by the recursive descent
  * mechanism, but is passed explicitly to the error reporting routine
@@ -60,6 +62,7 @@ static JsonParseErrorType parse_object_field(JsonLexContext *lex, JsonSemAction 
 static JsonParseErrorType parse_object(JsonLexContext *lex, JsonSemAction *sem);
 static JsonParseErrorType parse_array_element(JsonLexContext *lex, JsonSemAction *sem);
 static JsonParseErrorType parse_array(JsonLexContext *lex, JsonSemAction *sem);
+static JsonParseErrorType parse_array_with_cache(JsonLexContext *lex, JsonSemAction *sem);
 static JsonParseErrorType report_parse_error(JsonParseContext ctx, JsonLexContext *lex);
 static char *extract_token(JsonLexContext *lex);
 
@@ -177,7 +180,7 @@ makeJsonLexContextCstringLen(char *json, int len, int encoding, bool need_escape
  */
 JsonParseErrorType
 pg_parse_json(JsonLexContext *lex, JsonSemAction *sem)
-{   // todo:yyh 在此处进行JSON解析
+{
 	JsonTokenType tok;
 	JsonParseErrorType result;
 
@@ -196,7 +199,7 @@ pg_parse_json(JsonLexContext *lex, JsonSemAction *sem)
 			break;
 		case JSON_TOKEN_ARRAY_START:
 			result = parse_array(lex, sem);
-			break;
+            break;
 		default:
 			result = parse_scalar(lex, sem);	/* json can be a bare scalar */
 	}
@@ -205,6 +208,42 @@ pg_parse_json(JsonLexContext *lex, JsonSemAction *sem)
 		result = lex_expect(JSON_PARSE_END, lex, JSON_TOKEN_END);
 
 	return result;
+}
+
+JsonParseErrorType pg_parse_json_with_cache(JsonLexContext *lex, JsonSemAction *sem, bool fastSearch) {
+    JsonTokenType tok;
+    JsonParseErrorType result;
+
+    if (fastSearch) {
+        result = parse_array_with_cache(lex, sem);
+        return result;
+    }
+
+    /* get the initial token */
+    result = json_lex(lex); // 此函数设置解析到的 Token 的类型，放置在 lex->token_type 中
+    if (result != JSON_SUCCESS)
+        return result;
+
+    tok = lex_peek(lex);
+
+    /* parse by recursive descent */
+    switch (tok)
+    {   // 此处根据token的类型(开头的字符), 选择不同的解析方法
+        case JSON_TOKEN_OBJECT_START:
+            result = parse_object(lex, sem);
+            break;
+        case JSON_TOKEN_ARRAY_START:
+            result = parse_array(lex, sem);
+            savedParseInfoStatus = false;
+            break;
+        default:
+            result = parse_scalar(lex, sem);	/* json can be a bare scalar */
+    }
+
+    if (result == JSON_SUCCESS)
+        result = lex_expect(JSON_PARSE_END, lex, JSON_TOKEN_END);
+
+    return result;
 }
 
 /*
@@ -455,7 +494,7 @@ parse_array_element(JsonLexContext *lex, JsonSemAction *sem)
 			result = parse_array(lex, sem);
 			break;
 		default:
-			result = parse_scalar(lex, sem);
+			result = parse_scalar(lex, sem); // 会Parse COMMA
 	}
 
 	if (result != JSON_SUCCESS)
@@ -489,12 +528,12 @@ parse_array(JsonLexContext *lex, JsonSemAction *sem)
 	 * for the array start and restore it before we call the routine for the
 	 * array end.
 	 */
-	lex->lex_level++;
+	lex->lex_level++; // 保留状态
 
-	result = lex_expect(JSON_PARSE_ARRAY_START, lex, JSON_TOKEN_ARRAY_START);
+	result = lex_expect(JSON_PARSE_ARRAY_START, lex, JSON_TOKEN_ARRAY_START); // 跳过
 	if (result == JSON_SUCCESS && lex_peek(lex) != JSON_TOKEN_ARRAY_END)
 	{
-		result = parse_array_element(lex, sem);
+		result = parse_array_element(lex, sem); // 进入时是STRING, 出来时是COMMA
 
 		while (result == JSON_SUCCESS && lex_peek(lex) == JSON_TOKEN_COMMA)
 		{
@@ -517,6 +556,42 @@ parse_array(JsonLexContext *lex, JsonSemAction *sem)
 		(*aend) (sem->semstate);
 
 	return JSON_SUCCESS;
+}
+
+extern void setSavedParseInfoStatus(void) {
+    savedParseInfoStatus = true;
+}
+
+static JsonParseErrorType
+parse_array_with_cache(JsonLexContext *lex, JsonSemAction *sem) {
+    json_struct_action aend = sem->array_end;
+    JsonParseErrorType result = JSON_SUCCESS;
+
+    while (result == JSON_SUCCESS && lex_peek(lex) == JSON_TOKEN_COMMA)
+    {
+        result = json_lex(lex);
+        if (result != JSON_SUCCESS)
+            break;
+        result = parse_array_element(lex, sem);
+        if (savedParseInfoStatus) {
+            savedParseInfoStatus = false;
+            return JSON_SUCCESS; // 提前返回
+        }
+    }
+
+    if (result != JSON_SUCCESS)
+        return result;
+
+    result = lex_expect(JSON_PARSE_ARRAY_NEXT, lex, JSON_TOKEN_ARRAY_END);
+    if (result != JSON_SUCCESS)
+        return result;
+
+    lex->lex_level--;
+
+    if (aend != NULL)
+        (*aend) (sem->semstate);
+
+    return JSON_SUCCESS;
 }
 
 /*

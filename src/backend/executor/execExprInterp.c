@@ -751,7 +751,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			}
 			fcinfo->isnull = false;
 
-            // 如果调用的是json_object_field, 转到自定义的函数
+//             如果调用的是json_object_field, 转到自定义的函数
             switch (fcinfo->flinfo->fn_oid) {
                 case 3947:
                     d = json_object_field_with_cache(fcinfo, scanslot, scanslot->tts_tableOid, state->steps->d.var.attnum);
@@ -770,12 +770,6 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
                     break;
                 case 3950:
                     d = json_array_element_text_with_cache(fcinfo, scanslot, scanslot->tts_tableOid, state->steps->d.var.attnum);
-                    break;
-                case 3215:
-                    d = jsonb_array_element_with_cache(fcinfo, scanslot, scanslot->tts_tableOid, state->steps->d.var.attnum);
-                    break;
-                case 3216:
-                    d = jsonb_array_element_text_with_cache(fcinfo, scanslot, scanslot->tts_tableOid, state->steps->d.var.attnum);
                     break;
                 default:
                     d = op->d.func.fn_addr(fcinfo);
@@ -1836,6 +1830,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 
 out: // 不同的 id
     free_path();
+    free_primary_key();
 	*isnull = state->resnull;
 	return state->resvalue;
 }

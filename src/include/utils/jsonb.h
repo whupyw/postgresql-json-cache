@@ -289,7 +289,7 @@ struct JsonbValue
 		{
 			int			len;
 			JsonbContainer *data;
-		}			binary;		/* Array or object, in on-disk format */
+		} 			binary;		/* Array or object, in on-disk format */
 
 		struct
 		{
@@ -385,6 +385,9 @@ extern JsonbValue *findJsonbValueFromContainer(JsonbContainer *sheader,
 extern JsonbValue *getKeyJsonValueFromContainer(JsonbContainer *container,
 												const char *keyVal, int keyLen,
 												JsonbValue *res);
+extern JsonbValue *
+getKeyJsonValueFromContainerWithCache(JsonbContainer *container, const char *keyVal, int keyLen, JsonbValue *res,
+                                      char *compositeKey);
 extern JsonbValue *getIthJsonbValueFromContainer(JsonbContainer *sheader,
 												 uint32 i);
 extern JsonbValue *pushJsonbValue(JsonbParseState **pstate,

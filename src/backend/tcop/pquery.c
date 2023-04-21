@@ -27,6 +27,8 @@
 #include "utils/memutils.h"
 #include "utils/snapmgr.h"
 #include "utils/arc_json.h"
+#include "utils/arc_jsonb.h"
+#include "utils/jsonb_cache.h"
 
 
 /*
@@ -921,7 +923,7 @@ PortalRunSelect(Portal portal,
 			ExecutorRun(queryDesc, direction, (uint64) count,
 						portal->run_once);
             // yyh:输出日志
-            print_hit_rate();
+            print_jsonb_lru_hit_rate();
 			nprocessed = queryDesc->estate->es_processed;
 			PopActiveSnapshot();
 		}

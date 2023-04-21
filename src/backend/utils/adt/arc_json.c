@@ -10,10 +10,10 @@ struct JSON_ARC_LIST *b2 = NULL;
 
 struct JSON_CACHE_PTR *json_map_head = NULL;
 
-const double t_b_total = 1000; // c
+const double t_b_total = 1000; // c 24+40+1 = 65
 double t1_cap = 0.0; // p
 
-uint json_hit_count = 0, json_get_count = 0;
+uint json_hit_count = 0, json_get_count = 0, json_phantom_hit_count = 0, json_delete_count = 0;
 
 void init_arc_lists(void) {
     init_specific_list(&t1);
@@ -65,6 +65,7 @@ enum HitCase get_json_data(char *compositeKey, text **result) {
             *result = node->json_value;
             return HitT;
         case B1:
+            json_phantom_hit_count++;
             extendSize = b1->length >= b2->length ? 1 : b2->length / b1->length;
             t1_cap = min(t1_cap + extendSize, t_b_total);
             replace(false);
@@ -72,6 +73,7 @@ enum HitCase get_json_data(char *compositeKey, text **result) {
             // parse 后 复制 result 到 T2->head->json_value
             return HitB;
         case B2:
+            json_phantom_hit_count++;
             extendSize = b2->length >= b1->length ? 1 : b1->length / b2->length;
             t1_cap = max(t1_cap - extendSize, 0);
             replace(true);
@@ -177,12 +179,13 @@ struct JSON_CACHE_PTR *delete_from_list_and_free(struct JSON_CACHE_PTR *node) {
     HASH_DEL(json_map_head, node);
     remove_from_list(node);
     free_node(node);
+    json_delete_count++;
     return returnVal;
 }
 void free_node(struct JSON_CACHE_PTR *node) {
     if (node->composite_key != NULL)
         free(node->composite_key);
-    if (node->json_value != NULL)
+    if (node->list_type != B1 && node->list_type != B2 && node->json_value != NULL)
         free(node->json_value);
     free(node);
 }
@@ -209,10 +212,9 @@ extern void delete_json(char *key, enum KeyType keyType) {
     }
 }
 
-extern void print_hit_rate(void) {
+extern void print_json_hit_rate(void) {
     ereport(LOG,
-            (errmsg("get_count: %u, hit_count: %u",
-                    json_get_count, json_hit_count)));
-//    json_hit_count = 0;
-//    json_get_count = 0;
+            (errmsg("get_count: %u, hit_count: %u, phantom_hit_count: %u, delete_count: %u",
+                    json_get_count, json_hit_count,
+                    json_phantom_hit_count, json_delete_count)));
 }

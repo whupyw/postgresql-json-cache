@@ -24,6 +24,7 @@
 #include "utils/jsonb.h"
 #include "utils/memutils.h"
 #include "utils/varlena.h"
+#include "utils/jsonb_cache.h"
 
 /*
  * Maximum number of elements in an array (or key/value pairs in an object).
@@ -457,6 +458,88 @@ getKeyJsonValueFromContainer(JsonbContainer *container,
 
 	/* Not found */
 	return NULL;
+}
+
+JsonbValue *
+getKeyJsonValueFromContainerWithCache(JsonbContainer *container, const char *keyVal, int keyLen, JsonbValue *res,
+                                      char *compositeKey)
+{
+    JEntry	   *children = container->children;
+    int			count = JsonContainerSize(container);
+    char	   *baseAddr;
+    uint32		stopLow,
+            stopHigh;
+
+    int indexFromCache;
+
+    Assert(JsonContainerIsObject(container));
+
+    /* Quick out without a palloc cycle if object is empty */
+    if (count <= 0)
+        return NULL;
+
+    /*
+     * Binary search the container. Since we know this is an object, account
+     * for *Pairs* of Jentrys
+     */
+    baseAddr = (char *) (children + count * 2);
+    stopLow = 0;
+    stopHigh = count;
+
+    indexFromCache = find_jsonb_index(compositeKey);
+    if (indexFromCache != INT32_MIN) {
+        if (!res)
+            res = palloc(sizeof(JsonbValue));
+
+
+        fillJsonbValue(container, indexFromCache, baseAddr,
+                       getJsonbOffset(container, indexFromCache),
+                       res);
+        return res;
+    }
+
+    while (stopLow < stopHigh)
+    {
+        uint32		stopMiddle;
+        int			difference;
+        const char *candidateVal;
+        int			candidateLen;
+
+        stopMiddle = stopLow + (stopHigh - stopLow) / 2;
+
+        candidateVal = baseAddr + getJsonbOffset(container, stopMiddle);
+        candidateLen = getJsonbLength(container, stopMiddle);
+
+        difference = lengthCompareJsonbString(candidateVal, candidateLen,
+                                              keyVal, keyLen);
+
+        if (difference == 0)
+        {
+            /* Found our key, return corresponding value */
+            int			index = stopMiddle + count; // 排列: k k v v
+
+            if (!res)
+                res = palloc(sizeof(JsonbValue));
+
+            fillJsonbValue(container, index, baseAddr,
+                           getJsonbOffset(container, index),
+                           res);
+
+            insert_jsonb_index(compositeKey, index);
+
+            return res;
+        }
+        else
+        {
+            if (difference < 0)
+                stopLow = stopMiddle + 1;
+            else
+                stopHigh = stopMiddle;
+        }
+    }
+
+    /* Not found */
+    return NULL;
 }
 
 /*

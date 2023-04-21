@@ -3,6 +3,85 @@
 #include "utils/json_cache_utils.h"
 
 StringInfo path = NULL; // 存储path(12->address->postcode)
+StringInfo primaryKey = NULL; // 存储 121_3:12&4:12
+StringInfo pathPrev = NULL;
+
+struct ARRAY_PARSE_INFO *saveInfo = NULL;
+
+struct KeyInfo *keyInfoHeader = NULL;
+
+struct ARRAY_PARSE_LIST *arrayParseMapHead = NULL;
+
+void saveParseInfo(struct ARRAY_PARSE_INFO *info) {
+    saveInfo = info;
+}
+
+void insert_parse_info(char *parseKey, int pathIndex, struct ARRAY_PARSE_INFO *insertPosition) {
+    struct ARRAY_PARSE_LIST *mapPtr;
+    if (saveInfo == NULL)
+        return;
+    saveInfo->pathIndex = pathIndex;
+    HASH_FIND_STR(arrayParseMapHead, parseKey, mapPtr);
+    if (mapPtr == NULL) {
+        struct ARRAY_PARSE_LIST *parseMap = (struct ARRAY_PARSE_LIST*) malloc(sizeof (struct ARRAY_PARSE_LIST));
+        parseMap->parse_key = (char*) malloc(strlen(parseKey)+1);
+        strcpy(parseMap->parse_key, parseKey);
+        parseMap->head = parseMap->tail = saveInfo;
+        saveInfo->prev = saveInfo->next = NULL;
+        HASH_ADD_STR(arrayParseMapHead, parse_key, parseMap);
+    } else if (insertPosition == NULL) {
+        // 插入队首
+        saveInfo->next = mapPtr->head;
+        saveInfo->prev = NULL;
+        if (mapPtr->head != NULL) {
+            mapPtr->head->prev = saveInfo;
+            mapPtr->head = saveInfo;
+        } else {
+            mapPtr->head = mapPtr->tail = saveInfo;
+        }
+    } else {
+        if (insertPosition->next != NULL) {
+            saveInfo->next = insertPosition->next;
+            saveInfo->prev = insertPosition;
+            insertPosition->next = saveInfo;
+            saveInfo->next->prev = saveInfo;
+        } else {
+            saveInfo->next = NULL;
+            saveInfo->prev = insertPosition;
+            insertPosition->next = saveInfo;
+            mapPtr->tail = saveInfo;
+        }
+    }
+    saveInfo = NULL;
+}
+
+struct ARRAY_PARSE_INFO *search_the_parse_info(char *parse_key, int targetIndex) {
+    struct ARRAY_PARSE_LIST *ptr;
+    struct ARRAY_PARSE_INFO *node, *result;
+
+    HASH_FIND_STR(arrayParseMapHead, parse_key, ptr);
+    if (ptr == NULL || ptr->head == NULL || ptr->tail == NULL)
+        return NULL;
+    if (ptr->head->pathIndex > targetIndex)
+        return NULL;
+    if (ptr->tail->pathIndex <= targetIndex)
+        return ptr->tail;
+    // 从前到后抑或是从后到前
+    if (targetIndex - ptr->head->pathIndex <= ptr->tail->pathIndex - targetIndex) {
+        node = ptr->head;
+        while (node->pathIndex <= targetIndex) {
+            result = node;
+            node = node->next;
+        }
+    } else {
+        node = ptr->tail;
+        while (node->pathIndex > targetIndex) {
+            node = node->prev;
+            result = node;
+        }
+    }
+    return result;
+}
 
 /*
  * transform_primary_keys
@@ -104,7 +183,12 @@ extern PrimaryKeyInfo *get_primary_keys_att_no(Oid relid) {
         pkinfo= (PrimaryKeyInfo*)malloc(sizeof *pkinfo); // json内的单个数据
 
         pkinfo->nkeys = numkeys;
-        pkinfo->keyAttno = attnums;
+        pkinfo->relid = (int)relid;
+
+        pkinfo->keyAttno = malloc(numkeys * sizeof(int16_t));
+        for (int i = 0; i < numkeys; i++) {
+            pkinfo->keyAttno[i] = attnums[i];
+        }
         /* No need to search further */
         break;
     }
@@ -120,8 +204,14 @@ extern StringInfo get_composite_key(Oid relid, TupleTableSlot *slot, char *name,
 
     StringInfo compositeKey = NULL;
     PrimaryKeyInfo *keyAttnos = NULL; // 主键的列号数组
-    clock_t start, end;
-    double cpu_time_used;
+
+    int relidInt = (int) relid;
+
+    if (keyType == FastFetch && primaryKey != NULL) {
+        compositeKey = makeStringInfo();
+        appendStringInfo(compositeKey, "%s_%d->%s", primaryKey->data, attNum, name);
+        return compositeKey;
+    }
 
     if (keyType == Relid) {
         compositeKey = makeStringInfo();
@@ -129,51 +219,67 @@ extern StringInfo get_composite_key(Oid relid, TupleTableSlot *slot, char *name,
         return compositeKey;
     }
 
-    start = clock();
+    if (primaryKey != NULL)
+        goto LABEL;
 
-    keyAttnos = get_primary_keys_att_no(relid);
-
-    end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("Time used of get compositeKey: %f seconds\n", cpu_time_used);
+    HASH_FIND_INT(keyInfoHeader, &relidInt, keyAttnos);
+    if (keyAttnos == NULL) {
+        keyAttnos = get_primary_keys_att_no(relid);
+        if (keyAttnos == NULL) {
+            keyAttnos= (PrimaryKeyInfo*)malloc(sizeof *keyAttnos);
+            keyAttnos->relid = relidInt;
+            keyAttnos->keyAttno = NULL;
+            keyAttnos->nkeys = 0;
+        }
+        HASH_ADD_INT(keyInfoHeader, relid, keyAttnos);
+    }
 
     if (keyAttnos == NULL)
         return NULL;
 
-    start = clock();
+    primaryKey = transform_primary_keys(relid, keyAttnos, slot);
 
-    compositeKey = transform_primary_keys(relid, keyAttnos, slot);
+//    free(keyAttnos);
 
-    end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("Time used of get compositeKey: %f seconds\n", cpu_time_used);
+LABEL:
 
-    free(keyAttnos);
-
-    if (compositeKey == NULL || keyType == Relid_Tuple)
-        return compositeKey;
-
-    if (keyType == Relid_Tuple_Attnum) {
-        appendStringInfo(compositeKey, "_%d", attNum);
+    if (keyType == FastFetch) {
+        compositeKey = makeStringInfo();
+        appendStringInfo(compositeKey, "%s_%d->%s", primaryKey->data, attNum, name);
         return compositeKey;
     }
 
-    start = clock();
+    if (primaryKey == NULL || keyType == Relid_Tuple)
+        return primaryKey;
+
+    if (keyType == Relid_Tuple_Attnum) {
+        appendStringInfo(primaryKey, "_%d", attNum);
+        return primaryKey;
+    }
 
     if (path == NULL) {
         path = makeStringInfo();
+        pathPrev = makeStringInfo();
+        appendStringInfo(pathPrev, "%d", attNum);
         appendStringInfo(path, "%d->%s", attNum, name);
     } else {
+        appendBinaryStringInfo(pathPrev, path->data + pathPrev->len, path->len - pathPrev->len);
         appendStringInfo(path, "->%s", name);
     }
 
-    appendStringInfo(compositeKey, "_%s", path->data);
-
-    end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("Time used of get compositeKey: %f seconds\n", cpu_time_used);
+    compositeKey = makeStringInfo();
+    appendStringInfo(compositeKey, "%s_%s", primaryKey->data, path->data);
 
     return compositeKey;
+}
+
+
+extern char *getParseKey() {
+    char *res;
+    if (primaryKey == NULL || pathPrev == NULL)
+        return NULL;
+    res = psprintf("%s_%s", primaryKey->data, pathPrev->data);
+    return res;
 }
 
 extern void free_path(void) {
@@ -182,4 +288,15 @@ extern void free_path(void) {
     pfree(path->data);
     pfree(path);
     path = NULL;
+    pfree(pathPrev->data);
+    pfree(pathPrev);
+    pathPrev = NULL;
+}
+
+extern void free_primary_key(void) {
+    if (primaryKey == NULL)
+        return;
+    pfree(primaryKey->data);
+    pfree(primaryKey);
+    primaryKey = NULL;
 }

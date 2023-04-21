@@ -10,6 +10,7 @@ enum KeyType {
     Relid_Tuple,
     Relid_Tuple_Attnum,
     Relid_Tuple_Attnum_Path,
+    FastFetch,
 };
 
 enum ListType {
@@ -64,6 +65,6 @@ struct JSON_CACHE_PTR *delete_from_list_and_free(struct JSON_CACHE_PTR *node);
 
 void free_node(struct JSON_CACHE_PTR *node);
 
-extern void print_hit_rate(void);
+extern void print_json_hit_rate(void);
 
 #endif

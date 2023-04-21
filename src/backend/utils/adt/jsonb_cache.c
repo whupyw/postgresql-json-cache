@@ -13,60 +13,83 @@
 
 #include "utils/jsonb_cache.h"
 
-struct jsonb_cache *jsonbCache = NULL;
+struct JSONB_INDEX_CACHE *jsonbCacheHeader = NULL;
 
-void add_jsonb_data(char *primaryKey, char *pathName, JsonbValue *value) {
-    struct jsonb_cache *cache;
+struct JSONB_INDEX_CACHE *jsonbListHead = NULL, *jsonbListTail = NULL;
 
-    struct jsonb_data *datas = NULL;
+uint jsonb_lru_hit_count = 0, jsonb_lru_get_count = 0, jsonb_lru_delete_count = 0;
 
-    struct jsonb_data *data = (struct jsonb_data*) malloc(sizeof *data);
-    // todo:yyh 缓存淘汰策略
-    data->path_name = (char *) malloc(strlen(pathName) + 1);
-    strcpy(data->path_name, pathName);
+int JSONB_CACHE_MAX_SIZE = 1000;
+int current_size = 0;
 
-    data->value = (JsonbValue *) malloc(sizeof(JsonbValue) + VARSIZE(value) - VARHDRSZ);
-    memcpy(data->value, value, sizeof(JsonbValue) + VARSIZE(value) - VARHDRSZ);
-
-    HASH_FIND_STR(jsonbCache, primaryKey, cache);
-    // if already init specific cache
-    if (cache != NULL) {
-        HASH_ADD_STR(cache->datas, path_name, data);
-        return;
+void insert_jsonb_index(char *compositeKey, int index) {
+    struct JSONB_INDEX_CACHE *jsonbCache = (struct JSONB_INDEX_CACHE*) malloc((sizeof(struct JSONB_INDEX_CACHE)));
+    if (current_size >= JSONB_CACHE_MAX_SIZE) {
+        delete_lru();
     }
-    // else
-    HASH_ADD_STR(datas, path_name, data);
-    cache = (struct jsonb_cache*) malloc(sizeof *cache);
-
-    cache->primary_key = (char *) malloc(strlen(primaryKey) + 1);
-    strcpy(cache->primary_key, primaryKey);
-    cache->datas = datas;
-    HASH_ADD_STR(jsonbCache, primary_key, cache);
+    jsonbCache->composite_key = (char *) malloc(strlen(compositeKey) + 1);
+    strcpy(jsonbCache->composite_key, compositeKey);
+    jsonbCache->jsonb_index = index;
+    if (jsonbListHead == NULL) {
+        jsonbCache->prev = jsonbCache->next = NULL;
+        jsonbListHead = jsonbListTail = jsonbCache;
+    } else {
+        jsonbCache->next = jsonbListHead;
+        jsonbListHead->prev = jsonbCache;
+        jsonbCache->prev = NULL;
+        jsonbListHead = jsonbCache;
+    }
+    HASH_ADD_STR(jsonbCacheHeader, composite_key, jsonbCache);
+    current_size++;
 }
 
-JsonbValue *find_jsonb_data(char *primaryKey, char *pathName) {
-    struct jsonb_cache *cache;
-    struct jsonb_data *data;
-
-    HASH_FIND_STR(jsonbCache, primaryKey, cache);
-    if (cache == NULL)
-        return NULL;
-
-    HASH_FIND_STR(cache->datas, pathName, data);
-    if (data == NULL)
-        return NULL;
-
-    return data->value;
+int find_jsonb_index(char *compositeKey) {
+    struct JSONB_INDEX_CACHE *node;
+    jsonb_lru_get_count++;
+    HASH_FIND_STR(jsonbCacheHeader, compositeKey, node);
+    if (node == NULL)
+        return INT32_MIN;
+    jsonb_lru_hit_count++;
+    if (jsonbListHead != jsonbListTail && jsonbListHead != node) {
+        if (jsonbListTail == node) {
+            jsonbListTail = node->prev;
+            node->prev->next = NULL;
+        } else {
+            node->next->prev = node->prev;
+            node->prev->next = node->next;
+        }
+        node->prev = NULL;
+        node->next = jsonbListHead;
+        jsonbListHead->prev = node;
+        jsonbListHead = node;
+    }
+    return node->jsonb_index;
 }
 
-void delete_jsonb_by_primary_key(char *primaryKey) {
-    struct jsonb_cache *cache;
-    HASH_FIND_STR(jsonbCache, primaryKey, cache);
-    if (cache == NULL)
+void delete_lru(void) {
+    struct JSONB_INDEX_CACHE * node;
+    if (jsonbListHead == NULL)
         return;
-    HASH_DEL(jsonbCache, cache); // 从Hash Table中删除
-    if (cache->hh.prev == NULL) {
-        jsonbCache = (struct jsonb_cache*)cache->hh.next;
+    jsonb_lru_delete_count++;
+    current_size--;
+    if (jsonbListHead == jsonbListTail) {
+        HASH_DEL(jsonbCacheHeader, jsonbListHead);
+        free(jsonbListHead->composite_key);
+        free(jsonbListHead);
+        jsonbListHead = jsonbListTail = NULL;
+        return;
     }
-    free(cache);
+    node = jsonbListTail;
+    node->prev->next = NULL;
+    jsonbListTail = node->prev;
+    HASH_DEL(jsonbCacheHeader, node);
+    free(node->composite_key);
+    free(node);
+}
+
+extern void print_jsonb_lru_hit_rate(void) {
+    ereport(LOG,
+            (errmsg("get_count: %u, hit_count: %u, delete_count: %u",
+                    jsonb_lru_get_count, jsonb_lru_hit_count,
+                    jsonb_lru_delete_count)));
 }

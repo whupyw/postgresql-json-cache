@@ -353,6 +353,7 @@ static void get_array_start(void *state);
 static void get_array_end(void *state);
 static void get_array_element_start(void *state, bool isnull);
 static void get_array_element_end(void *state, bool isnull);
+static void get_array_element_end_with_cache(void *state, bool isnull);
 static void get_scalar(void *state, char *token, JsonTokenType tokentype);
 
 /* common worker function for json getter functions */
@@ -506,9 +507,17 @@ pg_parse_json_or_ereport(JsonLexContext *lex, JsonSemAction *sem)
 {
 	JsonParseErrorType result;
 
-	result = pg_parse_json(lex, sem); // todo:yyh 实际的解析工作执行位置
+	result = pg_parse_json(lex, sem);
 	if (result != JSON_SUCCESS)
 		json_ereport_error(result, lex);
+}
+
+void pg_parse_json_or_ereport_with_cache(JsonLexContext *lex, JsonSemAction *sem, bool fastSearch) {
+    JsonParseErrorType result;
+
+    result = pg_parse_json_with_cache(lex, sem, fastSearch);
+    if (result != JSON_SUCCESS)
+        json_ereport_error(result, lex);
 }
 
 /*
@@ -829,38 +838,26 @@ json_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid 
     StringInfo compositeKey = NULL; // The key for the map of json cache
     enum HitCase hitCase;
 
-    clock_t start, end;
-    double cpu_time_used;
+//    clock_t start, end;
+//    double cpu_time_used;
 
-    start = clock();
+//    start = clock();
 
     compositeKey = get_composite_key(relid, slot, fnamestr, attNum, Relid_Tuple_Attnum_Path);
 
-    end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("Time used of get compositeKey: %f seconds\n", cpu_time_used);
+//    end = clock();
+//    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+//    printf("Time used of get compositeKey: %f seconds\n", cpu_time_used);
 
-    start = clock();
     if (compositeKey != NULL)
         hitCase = get_json_data(compositeKey->data, &result);
 
-    end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("Time used of get from cache: %f seconds\n", cpu_time_used);
-
-    if (result == NULL) {
-        start = clock();
+    if (hitCase != HitT) {
         result = get_worker(json, &fnamestr, NULL, 1, false);
-        end = clock();
-        cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-        printf("Time used of parse json: %f seconds\n", cpu_time_used);
+
         // 加入缓存
         if (compositeKey != NULL) {
-            start = clock();
             insert_json_data(compositeKey->data, result, hitCase);
-            end = clock();
-            cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-            printf("Time used of insert cache: %f seconds\n", cpu_time_used);
         }
     }
 
@@ -908,28 +905,12 @@ jsonb_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid
     StringInfo compositeKey = NULL; // The key for the map of json cache
     enum JsonbHitCase hitCase;
 
-    clock_t start, end;
-    double cpu_time_used;
-
     if (!JB_ROOT_IS_OBJECT(jb))
         PG_RETURN_NULL();
 
-    compositeKey = get_composite_key(relid, slot, fnamestr, attNum, Relid_Tuple_Attnum_Path);
+    compositeKey = get_composite_key(relid, slot, fnamestr, attNum, FastFetch);
 
-    start = clock();
-    if (compositeKey != NULL)
-        hitCase = get_jsonb_data(compositeKey->data, &v);
-
-    end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC; // 计算消耗时间
-    printf("Time used of get from cache: %f seconds\n", cpu_time_used);
-
-    if (v == NULL) {
-        v = getKeyJsonValueFromContainer(&jb->root, VARDATA_ANY(key), VARSIZE_ANY_EXHDR(key), &vbuf);
-
-        if (v != NULL && compositeKey != NULL)
-            insert_jsonb_data(compositeKey->data, v, hitCase);
-    }
+    v = getKeyJsonValueFromContainerWithCache(&jb->root, VARDATA_ANY(key), VARSIZE_ANY_EXHDR(key), &vbuf, compositeKey->data);
 
     if (compositeKey != NULL) {
         pfree(compositeKey->data);
@@ -976,7 +957,7 @@ json_object_field_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot,
     if (compositeKey != NULL)
         hitCase = get_json_data(compositeKey->data, &result);
 
-    if (result == NULL) {
+    if (hitCase != HitT) {
         result = get_worker(json, &fnamestr, NULL, 1, true);
         // 加入缓存
         if (compositeKey != NULL) {
@@ -1026,22 +1007,13 @@ jsonb_object_field_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot
 
     char *fnamestr = text_to_cstring(key);
     StringInfo compositeKey = NULL; // The key for the map of json cache
-    enum JsonbHitCase hitCase;
 
     if (!JB_ROOT_IS_OBJECT(jb))
         PG_RETURN_NULL();
 
     compositeKey = get_composite_key(relid, slot, fnamestr, attNum, Relid_Tuple_Attnum_Path);
 
-    if (compositeKey != NULL)
-        hitCase = get_jsonb_data(compositeKey->data, &v);
-
-    if (v == NULL) {
-        v = getKeyJsonValueFromContainer(&jb->root, VARDATA_ANY(key), VARSIZE_ANY_EXHDR(key), &vbuf);
-
-        if (v != NULL && compositeKey != NULL)
-            insert_jsonb_data(compositeKey->data, v, hitCase);
-    }
+    v = getKeyJsonValueFromContainerWithCache(&jb->root, VARDATA_ANY(key), VARSIZE_ANY_EXHDR(key), &vbuf, compositeKey->data);
 
     if (compositeKey != NULL) {
         pfree(compositeKey->data);
@@ -1077,6 +1049,7 @@ json_array_element_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid
     text	   *json = PG_GETARG_TEXT_PP(0);
     int			element = PG_GETARG_INT32(1);
     text	   *result = NULL;
+    char *parseKey = NULL;
 
     char *eleStr = psprintf("%d", element);
 
@@ -1088,8 +1061,9 @@ json_array_element_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid
     if (compositeKey != NULL)
         hitCase = get_json_data(compositeKey->data, &result);
 
-    if (result == NULL) {
-        result = get_worker(json, NULL, &element, 1, false);
+    if (hitCase != HitT) {
+        parseKey = getParseKey();
+        result = get_worker_with_cache(json, NULL, &element, 1, false, parseKey);
 
         if (compositeKey != NULL)
             insert_json_data(compositeKey->data, result, hitCase);
@@ -1102,6 +1076,8 @@ json_array_element_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid
         pfree(compositeKey->data);
         pfree(compositeKey);
     }
+    if (parseKey != NULL)
+        pfree(parseKey);
 
     if (result != NULL)
         PG_RETURN_TEXT_P(result);
@@ -1171,7 +1147,7 @@ jsonb_array_element_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oi
     if (v == NULL) {
         v = getIthJsonbValueFromContainer(&jb->root, element);
 
-        if (v != NULL && compositeKey != NULL)
+        if (compositeKey != NULL)
             insert_jsonb_data(compositeKey->data, v, hitCase);
     }
 
@@ -1220,7 +1196,7 @@ json_array_element_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot
     if (compositeKey != NULL)
         hitCase = get_json_data(compositeKey->data, &result);
 
-    if (result == NULL) {
+    if (hitCase != HitT) {
         result = get_worker(json, NULL, &element, 1, true);
 
         if (compositeKey != NULL)
@@ -1304,7 +1280,7 @@ jsonb_array_element_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slo
     if (v == NULL) {
         v = getIthJsonbValueFromContainer(&jb->root, element);
 
-        if (v != NULL && v->type != jbvNull && compositeKey != NULL)
+        if (compositeKey != NULL)
             insert_jsonb_data(compositeKey->data, v, hitCase);
     }
 
@@ -1423,7 +1399,7 @@ get_worker(text *json,
 		   int *ipath,
 		   int npath,
 		   bool normalize_results)
-{   // todo:yyh 在这里取消解析
+{
 	JsonLexContext *lex = makeJsonLexContext(json, true); // 生成json文本的词法上下文，指定为对标准json文本进行解析。
 	JsonSemAction *sem = palloc0(sizeof(JsonSemAction)); // 动态分配一块内存，用于存储json的语义操作信息。
 	GetState   *state = palloc0(sizeof(GetState)); // 动态分配一块内存，用于存储json解析的相关状态。
@@ -1435,7 +1411,7 @@ get_worker(text *json,
 	state->normalize_results = normalize_results;
 	state->npath = npath;
 	state->path_names = tpath;
-	state->path_indexes = ipath;
+	state->path_indexes = ipath; // 需要的 index
 	state->pathok = palloc0(sizeof(bool) * npath);
 	state->array_cur_index = palloc(sizeof(int) * npath);
 
@@ -1471,6 +1447,82 @@ get_worker(text *json,
 	pg_parse_json_or_ereport(lex, sem); // 很消耗资源的一个函数
 
 	return state->tresult;
+}
+
+text *
+get_worker_with_cache(text *json, char **tpath, int *ipath, int npath, bool normalize_results, char *parseKey) {
+    JsonLexContext *lex = makeJsonLexContext(json, true); // 生成json文本的词法上下文，指定为对标准json文本进行解析。
+    JsonSemAction *sem = palloc0(sizeof(JsonSemAction)); // 动态分配一块内存，用于存储json的语义操作信息。
+    GetState   *state = palloc0(sizeof(GetState)); // 动态分配一块内存，用于存储json解析的相关状态。
+
+    struct ARRAY_PARSE_INFO * parseInfo = search_the_parse_info(parseKey, ipath[0]);
+    if (parseInfo != NULL && parseInfo->pathIndex == ipath[0]) {
+        char *start = lex->input + parseInfo->result_start;
+        int len = parseInfo->prev_token_terminator - parseInfo->result_start;
+        return cstring_to_text_with_len(start, len);
+    }
+
+    Assert(npath >= 0);
+
+    state->lex = lex;
+    /* is it "_as_text" variant? */
+    state->normalize_results = normalize_results;
+    state->npath = npath;
+    state->path_names = tpath;
+    state->path_indexes = ipath; // 需要的 index
+    state->pathok = palloc0(sizeof(bool) * npath);
+    state->array_cur_index = palloc(sizeof(int) * npath);
+
+    if (npath > 0)
+        state->pathok[0] = true;
+
+    sem->semstate = (void *) state;
+
+    /*
+     * Not all variants need all the semantic routines. Only set the ones that
+     * are actually needed for maximum efficiency.
+     */
+    sem->scalar = get_scalar; // 处理标量值的过程函数
+    if (npath == 0) // 处理标量值
+    {
+        sem->object_start = get_object_start;
+        sem->object_end = get_object_end;
+        sem->array_start = get_array_start;
+        sem->array_end = get_array_end;
+    }
+    if (tpath != NULL) // 处理JSON Object
+    {
+        sem->object_field_start = get_object_field_start;
+        sem->object_field_end = get_object_field_end;
+    }
+    if (ipath != NULL)
+    {
+        sem->array_start = get_array_start;
+        sem->array_element_start = get_array_element_start;
+        // 处理函数不一样
+        sem->array_element_end = get_array_element_end_with_cache;
+    }
+
+    if (parseInfo != NULL) {
+        lex->token_start = lex->input + parseInfo->token_start;
+        lex->token_terminator = lex->input + parseInfo->token_terminator;
+        lex->prev_token_terminator = lex->input + parseInfo->prev_token_terminator;
+        lex->token_type = JSON_TOKEN_COMMA;
+        lex->lex_level = parseInfo->lex_level;
+        lex->line_number = parseInfo->line_number;
+        lex->line_start = lex->input + parseInfo->line_start;
+        appendStringInfo(lex->strval, parseInfo->strVal);
+        // 扫描的下标直接从最近的开始
+        state->array_cur_index[0] = parseInfo->array_cur_index;
+    }
+    if (parseInfo != NULL) {
+        pg_parse_json_or_ereport_with_cache(lex, sem, true); // 很消耗资源的一个函数
+    } else {
+        pg_parse_json_or_ereport_with_cache(lex, sem, false);
+    }
+    insert_parse_info(parseKey, ipath[0], parseInfo);
+
+    return state->tresult;
 }
 
 static void
@@ -1740,6 +1792,64 @@ get_array_element_end(void *state, bool isnull)
 
 		_state->result_start = NULL;
 	}
+}
+
+static void get_array_element_end_with_cache(void *state, bool isnull) {
+    GetState   *_state = (GetState *) state;
+    bool		get_last = false;
+    int			lex_level = _state->lex->lex_level;
+    struct ARRAY_PARSE_INFO *saveInfo = NULL;
+    JsonLexContext *lex;
+
+    /* same tests as in get_array_element_start */
+    if (lex_level <= _state->npath &&
+        _state->pathok[lex_level - 1] &&
+        _state->path_indexes != NULL &&
+        _state->array_cur_index[lex_level - 1] == _state->path_indexes[lex_level - 1])
+    {
+        if (lex_level < _state->npath)
+        {
+            /* done with this element so reset pathok */
+            _state->pathok[lex_level] = false;
+        }
+        else
+        {
+            /* end of path, so we want this value */
+            get_last = true;
+        }
+    }
+
+    /* same logic as for objects */
+    if (get_last && _state->result_start != NULL)
+    {
+        if (isnull && _state->normalize_results)
+            _state->tresult = (text *) NULL;
+        else
+        {
+            char	   *start = _state->result_start;
+            int			len = _state->lex->prev_token_terminator - start;
+
+            _state->tresult = cstring_to_text_with_len(start, len);
+
+            saveInfo = (struct ARRAY_PARSE_INFO*) malloc(sizeof(struct ARRAY_PARSE_INFO));
+            lex = _state->lex;
+            saveInfo->token_start = lex->token_start - lex->input;
+            saveInfo->token_terminator = lex->token_terminator - lex->input;
+            saveInfo->prev_token_terminator = lex->prev_token_terminator - lex->input;
+//        saveInfo->token_type = lex->token_type;
+            saveInfo->lex_level = lex->lex_level;
+            saveInfo->line_number = lex->line_number;
+            saveInfo->line_start = lex->line_start - lex->input;
+            saveInfo->strVal = (char *) malloc(strlen(lex->strval->data)+1);
+            strcpy(saveInfo->strVal, lex->strval->data);
+            saveInfo->array_cur_index = _state->array_cur_index[0];
+            saveInfo->result_start = start - lex->input;
+            saveParseInfo(saveInfo);
+            setSavedParseInfoStatus();
+        }
+        // 这里已经成功得到结果了, 存起来
+        _state->result_start = NULL;
+    }
 }
 
 static void
