@@ -320,6 +320,7 @@ extern StringInfo get_composite_key(Oid relid, TupleTableSlot *slot, char *name,
                 HASH_DEL(keyInfoHeader, current_info);
                 free(current_info->keyAttno);
                 free(current_info);
+                keyInfoCurrentSize--;
                 break;
             }
         }
