@@ -13,20 +13,79 @@ struct ARRAY_PARSE_INFO *saveInfo = NULL;
 
 struct KeyInfo *keyInfoHeader = NULL;
 
-struct ARRAY_PARSE_LIST *arrayParseMapHead = NULL;
+struct ARRAY_PARSE_LIST *arrayParseMapHeader = NULL;
+
+struct ARRAY_PARSE_LIST *piHead = NULL, *piTail = NULL;
 
 void saveParseInfo(struct ARRAY_PARSE_INFO *info) {
     saveInfo = info;
 }
 
+void delete_lru_pi(void) {
+    struct ARRAY_PARSE_LIST *node;
+    if (piHead == NULL) return;
+    parseInfoCurrentSize--;
+    if (piHead == piTail) {
+        HASH_DEL(arrayParseMapHeader, piHead);
+        free_parse_info(piHead);
+        free(piHead->parse_key);
+        free(piHead);
+        piHead = piTail = NULL;
+        return;
+    }
+    node = piTail;
+    node->prev->next = NULL;
+    piTail = node->prev;
+    HASH_DEL(arrayParseMapHeader, node);
+    free_parse_info(piHead);
+    free(node->parse_key);
+    free(node);
+}
+
+void free_parse_info(struct ARRAY_PARSE_LIST *node) {
+    struct ARRAY_PARSE_INFO *nextPtr;
+    if (node->head == NULL) return;
+    for (struct ARRAY_PARSE_INFO * ptr = node->head; ptr != NULL; ptr = nextPtr) {
+        nextPtr = ptr->next;
+        free(ptr->strVal);
+        free(ptr);
+    }
+}
+
+void delete_parse_info(char *key) {
+    for(struct ARRAY_PARSE_LIST * node = piHead; node != NULL; ) {
+        struct ARRAY_PARSE_LIST *nextNode = node->next;
+        if (strncmp(key, node->parse_key, strlen(key)) == 0) {
+            free_parse_info(node);
+            free(node->parse_key);
+            free(node);
+        }
+        node = nextNode;
+    }
+}
+
 struct ARRAY_PARSE_INFO *search_the_parse_info(char *parse_key, int targetIndex) {
     struct ARRAY_PARSE_LIST *ptr;
-    struct ARRAY_PARSE_INFO *node, *result;
+    struct ARRAY_PARSE_INFO *result;
 
-    HASH_FIND_STR(arrayParseMapHead, parse_key, ptr);
+    HASH_FIND_STR(arrayParseMapHeader, parse_key, ptr);
 
     if (ptr == NULL || ptr->head == NULL || ptr->tail == NULL) {
         return NULL;
+    }
+
+    if (piHead != piTail && piTail != ptr) {
+        if (piTail == ptr) {
+            piTail = ptr->prev;
+            ptr->prev->next = NULL;
+        } else {
+            ptr->next->prev = ptr->prev;
+            ptr->prev->next = ptr->next;
+        }
+        ptr->prev = NULL;
+        ptr->next = piHead;
+        piHead->prev = ptr;
+        piHead = ptr;
     }
 
     if (ptr->head->pathIndex > targetIndex) {
@@ -38,13 +97,13 @@ struct ARRAY_PARSE_INFO *search_the_parse_info(char *parse_key, int targetIndex)
     }
     // 从前到后抑或是从后到前
     if (targetIndex - ptr->head->pathIndex <= ptr->tail->pathIndex - targetIndex) {
-        node = ptr->head;
+        struct ARRAY_PARSE_INFO *node = ptr->head;
         while (node->pathIndex <= targetIndex) {
             result = node;
             node = node->next;
         }
     } else {
-        node = ptr->tail;
+        struct ARRAY_PARSE_INFO *node = ptr->tail;
         while (node->pathIndex > targetIndex) {
             node = node->prev;
             result = node;
@@ -57,15 +116,33 @@ void insert_parse_info(char *parseKey, int pathIndex, struct ARRAY_PARSE_INFO *i
     struct ARRAY_PARSE_LIST *mapPtr;
     if (saveInfo == NULL)
         return;
+
     saveInfo->pathIndex = pathIndex;
-    HASH_FIND_STR(arrayParseMapHead, parseKey, mapPtr);
+
+    HASH_FIND_STR(arrayParseMapHeader, parseKey, mapPtr);
+
     if (mapPtr == NULL) {
         struct ARRAY_PARSE_LIST *parseMap = (struct ARRAY_PARSE_LIST*) malloc(sizeof (struct ARRAY_PARSE_LIST));
+        if (parseInfoCurrentSize >= parseInfoMaxSize) {
+            delete_lru_pi();
+        }
+
         parseMap->parse_key = (char*) malloc(strlen(parseKey)+1);
         strcpy(parseMap->parse_key, parseKey);
         parseMap->head = parseMap->tail = saveInfo;
         saveInfo->prev = saveInfo->next = NULL;
-        HASH_ADD_STR(arrayParseMapHead, parse_key, parseMap);
+        if (piHead == NULL) {
+            parseMap->prev = parseMap->next = NULL;
+            piHead = piTail = parseMap;
+        } else {
+            parseMap->next = piHead;
+            piHead->prev = parseMap;
+            parseMap->prev = NULL;
+            piHead = parseMap;
+        }
+        HASH_ADD_STR(arrayParseMapHeader, parse_key, parseMap);
+        parseInfoCurrentSize++;
+
     } else if (insertPosition == NULL) {
         // 插入队首
         saveInfo->next = mapPtr->head;
@@ -91,6 +168,7 @@ void insert_parse_info(char *parseKey, int pathIndex, struct ARRAY_PARSE_INFO *i
     }
     saveInfo = NULL;
 }
+
 
 /*
  * transform_primary_keys

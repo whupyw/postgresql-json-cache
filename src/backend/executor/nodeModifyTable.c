@@ -1845,6 +1845,7 @@ lreplace:;
                 compositeKey = get_composite_key(relid, slot, NULL, attno, Relid_Tuple_Attnum);
                 if (compositeKey != NULL) {
                     delete_json(compositeKey->data, Relid_Tuple_Attnum);
+                    delete_parse_info(compositeKey->data);
                 }
                 if (compositeKey != NULL) {
                     pfree(compositeKey->data);
@@ -2629,6 +2630,7 @@ ExecModifyTable(PlanState *pstate)
 
                 if (compositeKey != NULL) {
                     delete_json(compositeKey->data, Relid_Tuple);
+                    delete_parse_info(compositeKey->data);
                     pfree(compositeKey->data);
                     pfree(compositeKey);
                 }

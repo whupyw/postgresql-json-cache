@@ -1445,6 +1445,7 @@ RemoveRelations(DropStmt *drop)
         // note:yyh 不要打开这个文件，会让你的ide卡死
         compositeKey = get_composite_key(relOid, NULL, NULL, 0, Relid);
         delete_json(compositeKey->data, Relid);
+        delete_parse_info(compositeKey->data);
         pfree(compositeKey->data);
         pfree(compositeKey);
 	}

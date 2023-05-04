@@ -43,11 +43,15 @@ struct ARRAY_PARSE_LIST {
     UT_hash_handle hh;
 };
 
+void free_parse_info(struct ARRAY_PARSE_LIST *node);
+
 struct ARRAY_PARSE_INFO *search_the_parse_info(char *parse_key, int targetIndex);
 
 void insert_parse_info(char *parseKey, int pathIndex, struct ARRAY_PARSE_INFO *insertPosition);
 
-void delete_parse_info(char *parseKey);
+void delete_parse_info(char *key);
+
+void delete_lru_pi(void);
 
 void saveParseInfo(struct ARRAY_PARSE_INFO *info);
 
