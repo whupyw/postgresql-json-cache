@@ -9,6 +9,8 @@ StringInfo primaryKey = NULL; // 存储 121_3:12&4:12
 const int parseInfoMaxSize = 1000;
 int parseInfoCurrentSize = 0; // p
 
+int keyInfoCurrentSize = 0;
+
 struct ARRAY_PARSE_INFO *saveInfo = NULL;
 
 struct KeyInfo *keyInfoHeader = NULL;
@@ -305,6 +307,7 @@ extern StringInfo get_composite_key(Oid relid, TupleTableSlot *slot, char *name,
 
     HASH_FIND_INT(keyInfoHeader, &relidInt, keyAttnos);
     if (keyAttnos == NULL) {
+        struct KeyInfo *current_info, *tmp;
         keyAttnos = get_primary_keys_att_no(relid);
         if (keyAttnos == NULL) {
             keyAttnos= (PrimaryKeyInfo*)malloc(sizeof *keyAttnos);
@@ -312,7 +315,16 @@ extern StringInfo get_composite_key(Oid relid, TupleTableSlot *slot, char *name,
             keyAttnos->keyAttno = NULL;
             keyAttnos->nkeys = 0;
         }
+        if (keyInfoCurrentSize >= 100000) {
+            HASH_ITER(hh, keyInfoHeader, current_info, tmp) {
+                HASH_DEL(keyInfoHeader, current_info);
+                free(current_info->keyAttno);
+                free(current_info);
+                break;
+            }
+        }
         HASH_ADD_INT(keyInfoHeader, relid, keyAttnos);
+        keyInfoCurrentSize++;
     }
 
     if (keyAttnos == NULL)
