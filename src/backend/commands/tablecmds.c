@@ -103,6 +103,7 @@
 
 #include "utils/arc_json.h"
 #include "utils/json_cache_utils.h"
+#include "utils/json_update_sync.h"
 
 /*
  * ON COMMIT action list
@@ -1446,6 +1447,7 @@ RemoveRelations(DropStmt *drop)
         compositeKey = get_composite_key(relOid, NULL, NULL, 0, Relid);
         delete_json(compositeKey->data, Relid);
         delete_parse_info(compositeKey->data);
+        sendInvalidMessage(compositeKey->data, Relid);
         pfree(compositeKey->data);
         pfree(compositeKey);
 	}

@@ -50,6 +50,7 @@ OBJS = \
 	json.o \
 	json_cache.o \
 	json_cache_utils.o \
+	json_update_sync.o \
 	jsonb.o \
 	jsonb_cache.o \
 	jsonb_gin.o \

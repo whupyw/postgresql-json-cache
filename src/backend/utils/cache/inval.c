@@ -117,6 +117,7 @@
 #include "utils/relmapper.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
+#include "utils/json_update_sync.h"
 
 
 /*
@@ -688,6 +689,8 @@ AcceptInvalidationMessages(void)
 {
 	ReceiveSharedInvalidMessages(LocalExecuteInvalidationMessage,
 								 InvalidateSystemCaches);
+
+    receiveInvalidMessage(); // note:yyh 自定义的SI函数
 
 	/*----------
 	 * Test code to force cache flushes anytime a flush could happen.

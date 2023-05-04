@@ -54,6 +54,7 @@
 #include "utils/rel.h"
 #include "utils/json_cache_utils.h"
 #include "utils/arc_json.h"
+#include "utils/json_update_sync.h"
 
 
 typedef struct MTTargetRelLookup
@@ -1846,6 +1847,7 @@ lreplace:;
                 if (compositeKey != NULL) {
                     delete_json(compositeKey->data, Relid_Tuple_Attnum);
                     delete_parse_info(compositeKey->data);
+                    sendInvalidMessage(compositeKey->data, Relid_Tuple_Attnum);
                 }
                 if (compositeKey != NULL) {
                     pfree(compositeKey->data);
@@ -2631,6 +2633,7 @@ ExecModifyTable(PlanState *pstate)
                 if (compositeKey != NULL) {
                     delete_json(compositeKey->data, Relid_Tuple);
                     delete_parse_info(compositeKey->data);
+                    sendInvalidMessage(compositeKey->data, Relid_Tuple);
                     pfree(compositeKey->data);
                     pfree(compositeKey);
                 }
