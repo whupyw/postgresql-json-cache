@@ -1836,7 +1836,7 @@ lreplace:;
                 Oid attType = resultRelationDesc->rd_att->attrs[attno-1].atttypid;
                 Oid relid = slot->tts_tableOid;
 
-                char *compositeKey = NULL;
+                StringInfo compositeKey = NULL;
 
                 // 114: JSON
                 if (attType != 114) {
@@ -1844,10 +1844,12 @@ lreplace:;
                 }
                 compositeKey = get_composite_key(relid, slot, NULL, attno, Relid_Tuple_Attnum);
                 if (compositeKey != NULL) {
-                    delete_json(compositeKey, Relid_Tuple_Attnum);
+                    delete_json(compositeKey->data, Relid_Tuple_Attnum);
                 }
-                if (compositeKey != NULL)
+                if (compositeKey != NULL) {
+                    pfree(compositeKey->data);
                     pfree(compositeKey);
+                }
                 break;
             }
 
@@ -2621,15 +2623,15 @@ ExecModifyTable(PlanState *pstate)
                 // note:yyh 删除JSON(整行)
                 Oid relid =  resultRelInfo->ri_RelationDesc->rd_id;
 
-                char *compositeKey = NULL;
+                StringInfo compositeKey = NULL;
 
                 compositeKey = get_composite_key(relid, slot, NULL, 0, Relid_Tuple);
 
                 if (compositeKey != NULL) {
-                    delete_json(compositeKey, Relid_Tuple);
-                }
-                if (compositeKey != NULL)
+                    delete_json(compositeKey->data, Relid_Tuple);
+                    pfree(compositeKey->data);
                     pfree(compositeKey);
+                }
 
                 slot = ExecDelete(node, resultRelInfo, tupleid, oldtuple,
                                   planSlot, &node->mt_epqstate, estate,

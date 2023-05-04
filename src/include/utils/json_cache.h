@@ -11,6 +11,8 @@
  *-------------------------------------------------------------------------
  */
 
+// @ Deprecated -> Check the newest codes in 'arc_json.h'
+
 #ifndef JSON_CACHE_H
 #define JSON_CACHE_H
 

@@ -10,7 +10,6 @@ enum KeyType {
     Relid_Tuple,
     Relid_Tuple_Attnum,
     Relid_Tuple_Attnum_Path,
-    FastFetch,
 };
 
 enum ListType {

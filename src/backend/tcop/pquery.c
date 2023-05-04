@@ -27,7 +27,6 @@
 #include "utils/memutils.h"
 #include "utils/snapmgr.h"
 #include "utils/arc_json.h"
-#include "utils/arc_jsonb.h"
 #include "utils/jsonb_cache.h"
 
 

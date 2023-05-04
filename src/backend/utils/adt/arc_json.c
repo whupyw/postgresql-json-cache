@@ -10,7 +10,7 @@ struct JSON_ARC_LIST *b2 = NULL;
 
 struct JSON_CACHE_PTR *json_map_head = NULL;
 
-const double t_b_total = 1000; // c 24+40+1 = 65
+const double t_b_total = 1000; // c 缓存容量
 double t1_cap = 0.0; // p
 
 uint json_hit_count = 0, json_get_count = 0, json_phantom_hit_count = 0, json_delete_count = 0;
@@ -195,7 +195,7 @@ extern void delete_json(char *key, enum KeyType keyType) {
     // 未初始化缓存系统
     if (t1 == NULL || t2 == NULL || b1 == NULL || b2 == NULL)
         return;
-    // 这种情况对JSON是不存在的? 因为不能删除或更新单个Key, 如果JSONB可以？
+    // 这种情况对JSON是不存在的, 因为不能删除或更新单个Key
     if (keyType == Relid_Tuple_Attnum_Path) {
         return;
     }

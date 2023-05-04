@@ -759,12 +759,6 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
                 case 3948:
                     d = json_object_field_text_with_cache(fcinfo, scanslot, scanslot->tts_tableOid, state->steps->d.var.attnum);
                     break;
-                case 3478:
-                    d = jsonb_object_field_with_cache(fcinfo, scanslot, scanslot->tts_tableOid, state->steps->d.var.attnum);
-                    break;
-                case 3214:
-                    d = jsonb_object_field_text_with_cache(fcinfo, scanslot, scanslot->tts_tableOid, state->steps->d.var.attnum);
-                    break;
                 case 3949:
                     d = json_array_element_with_cache(fcinfo, scanslot, scanslot->tts_tableOid, state->steps->d.var.attnum);
                     break;

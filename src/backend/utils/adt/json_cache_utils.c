@@ -1,10 +1,13 @@
 #include <time.h>
-#include <bits/time.h>
 #include "utils/json_cache_utils.h"
 
 StringInfo path = NULL; // 存储path(12->address->postcode)
+StringInfo pathPrev = NULL; // 存储前一个path
+
 StringInfo primaryKey = NULL; // 存储 121_3:12&4:12
-StringInfo pathPrev = NULL;
+
+const int parseInfoMaxSize = 1000;
+int parseInfoCurrentSize = 0; // p
 
 struct ARRAY_PARSE_INFO *saveInfo = NULL;
 
@@ -14,6 +17,40 @@ struct ARRAY_PARSE_LIST *arrayParseMapHead = NULL;
 
 void saveParseInfo(struct ARRAY_PARSE_INFO *info) {
     saveInfo = info;
+}
+
+struct ARRAY_PARSE_INFO *search_the_parse_info(char *parse_key, int targetIndex) {
+    struct ARRAY_PARSE_LIST *ptr;
+    struct ARRAY_PARSE_INFO *node, *result;
+
+    HASH_FIND_STR(arrayParseMapHead, parse_key, ptr);
+
+    if (ptr == NULL || ptr->head == NULL || ptr->tail == NULL) {
+        return NULL;
+    }
+
+    if (ptr->head->pathIndex > targetIndex) {
+        return NULL;
+    }
+
+    if (ptr->tail->pathIndex <= targetIndex) {
+        return ptr->tail;
+    }
+    // 从前到后抑或是从后到前
+    if (targetIndex - ptr->head->pathIndex <= ptr->tail->pathIndex - targetIndex) {
+        node = ptr->head;
+        while (node->pathIndex <= targetIndex) {
+            result = node;
+            node = node->next;
+        }
+    } else {
+        node = ptr->tail;
+        while (node->pathIndex > targetIndex) {
+            node = node->prev;
+            result = node;
+        }
+    }
+    return result;
 }
 
 void insert_parse_info(char *parseKey, int pathIndex, struct ARRAY_PARSE_INFO *insertPosition) {
@@ -53,34 +90,6 @@ void insert_parse_info(char *parseKey, int pathIndex, struct ARRAY_PARSE_INFO *i
         }
     }
     saveInfo = NULL;
-}
-
-struct ARRAY_PARSE_INFO *search_the_parse_info(char *parse_key, int targetIndex) {
-    struct ARRAY_PARSE_LIST *ptr;
-    struct ARRAY_PARSE_INFO *node, *result;
-
-    HASH_FIND_STR(arrayParseMapHead, parse_key, ptr);
-    if (ptr == NULL || ptr->head == NULL || ptr->tail == NULL)
-        return NULL;
-    if (ptr->head->pathIndex > targetIndex)
-        return NULL;
-    if (ptr->tail->pathIndex <= targetIndex)
-        return ptr->tail;
-    // 从前到后抑或是从后到前
-    if (targetIndex - ptr->head->pathIndex <= ptr->tail->pathIndex - targetIndex) {
-        node = ptr->head;
-        while (node->pathIndex <= targetIndex) {
-            result = node;
-            node = node->next;
-        }
-    } else {
-        node = ptr->tail;
-        while (node->pathIndex > targetIndex) {
-            node = node->prev;
-            result = node;
-        }
-    }
-    return result;
 }
 
 /*
@@ -207,12 +216,6 @@ extern StringInfo get_composite_key(Oid relid, TupleTableSlot *slot, char *name,
 
     int relidInt = (int) relid;
 
-    if (keyType == FastFetch && primaryKey != NULL) {
-        compositeKey = makeStringInfo();
-        appendStringInfo(compositeKey, "%s_%d->%s", primaryKey->data, attNum, name);
-        return compositeKey;
-    }
-
     if (keyType == Relid) {
         compositeKey = makeStringInfo();
         appendStringInfo(compositeKey, "%u", (unsigned int) relid);
@@ -243,12 +246,6 @@ extern StringInfo get_composite_key(Oid relid, TupleTableSlot *slot, char *name,
 
 LABEL:
 
-    if (keyType == FastFetch) {
-        compositeKey = makeStringInfo();
-        appendStringInfo(compositeKey, "%s_%d->%s", primaryKey->data, attNum, name);
-        return compositeKey;
-    }
-
     if (primaryKey == NULL || keyType == Relid_Tuple)
         return primaryKey;
 
@@ -274,7 +271,7 @@ LABEL:
 }
 
 
-extern char *getParseKey() {
+extern char *getParseKey(void) {
     char *res;
     if (primaryKey == NULL || pathPrev == NULL)
         return NULL;

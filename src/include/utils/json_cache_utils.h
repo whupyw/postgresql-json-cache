@@ -11,7 +11,7 @@
 
 // 存储 primaryKeyInfo 的 Hash表
 typedef struct KeyInfo {
-    int relid;
+    int relid; // key
     int nkeys;
     int16* keyAttno;
     UT_hash_handle hh;
@@ -35,6 +35,9 @@ struct ARRAY_PARSE_INFO {
 
 struct ARRAY_PARSE_LIST {
     char *parse_key;
+    struct ARRAY_PARSE_LIST *next;
+    struct ARRAY_PARSE_LIST *prev;
+
     struct ARRAY_PARSE_INFO *head;
     struct ARRAY_PARSE_INFO *tail;
     UT_hash_handle hh;
@@ -54,7 +57,7 @@ extern StringInfo transform_primary_keys(Oid relid, PrimaryKeyInfo *pkinfo, Tupl
 
 extern StringInfo get_composite_key(Oid relid, TupleTableSlot *slot, char *name, int attNum, enum KeyType keyType);
 
-extern char *getParseKey();
+extern char *getParseKey(void);
 
 extern void free_primary_key(void);
 
@@ -71,16 +74,6 @@ json_array_element_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid
 
 extern Datum
 json_array_element_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int attNum);
-
-extern Datum
-jsonb_array_element_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int attNum);
-extern Datum
-jsonb_array_element_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int attNum);
-
-extern Datum
-jsonb_object_field_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int attNum);
-extern Datum
-jsonb_object_field_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot, Oid relid, int attNum);
 
 text *
 get_worker_with_cache(text *json, char **tpath, int *ipath, int npath, bool normalize_results, char *parseKey);

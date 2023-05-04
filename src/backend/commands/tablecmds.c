@@ -1383,7 +1383,7 @@ RemoveRelations(DropStmt *drop)
 		Oid			relOid;
 		ObjectAddress obj;
 		struct DropRelationCallbackState state;
-        char *compositeKey;
+        StringInfo compositeKey;
 
 		/*
 		 * These next few steps are a great deal like relation_openrv, but we
@@ -1444,7 +1444,8 @@ RemoveRelations(DropStmt *drop)
 		add_exact_object_address(&obj, objects);
         // note:yyh 不要打开这个文件，会让你的ide卡死
         compositeKey = get_composite_key(relOid, NULL, NULL, 0, Relid);
-        delete_json(compositeKey, Relid);
+        delete_json(compositeKey->data, Relid);
+        pfree(compositeKey->data);
         pfree(compositeKey);
 	}
 
