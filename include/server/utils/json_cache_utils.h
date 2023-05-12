@@ -22,11 +22,9 @@ struct ARRAY_PARSE_INFO {
     int token_start; // ptr
     int token_terminator; // ptr
     int prev_token_terminator; // ptr
-//    JsonTokenType token_type;
     int lex_level;
     int line_number;
     int line_start; // ptr
-    char* strVal;
     int array_cur_index;
     int result_start; // ptr
     struct ARRAY_PARSE_INFO *prev;
@@ -81,3 +79,5 @@ json_array_element_text_with_cache(FunctionCallInfo fcinfo, TupleTableSlot *slot
 
 text *
 get_worker_with_cache(text *json, char **tpath, int *ipath, int npath, bool normalize_results, char *parseKey);
+
+extern void print_pi_hit_rate(void);

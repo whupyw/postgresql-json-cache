@@ -52,8 +52,7 @@
 #include "utils/datum.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
-#include "utils/json_cache_utils.h"
-#include "utils/arc_json.h"
+
 #include "utils/json_update_sync.h"
 
 

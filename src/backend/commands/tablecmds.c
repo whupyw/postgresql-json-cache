@@ -101,8 +101,6 @@
 #include "utils/timestamp.h"
 #include "utils/typcache.h"
 
-#include "utils/arc_json.h"
-#include "utils/json_cache_utils.h"
 #include "utils/json_update_sync.h"
 
 /*

@@ -6,10 +6,12 @@ StringInfo pathPrev = NULL; // 存储前一个path
 
 StringInfo primaryKey = NULL; // 存储 121_3:12&4:12
 
-const int parseInfoMaxSize = 1000;
+const int parseInfoMaxSize = 5; // 缓存容量
 int parseInfoCurrentSize = 0; // p
 
 int keyInfoCurrentSize = 0;
+
+uint pi_hit_count = 0, pi_get_count = 0, pi_delete_count = 0;
 
 struct ARRAY_PARSE_INFO *saveInfo = NULL;
 
@@ -25,13 +27,13 @@ void saveParseInfo(struct ARRAY_PARSE_INFO *info) {
 
 void delete_lru_pi(void) {
     struct ARRAY_PARSE_LIST *node;
-    if (piHead == NULL) return;
+    if (piTail == NULL) return;
     parseInfoCurrentSize--;
     if (piHead == piTail) {
-        HASH_DEL(arrayParseMapHeader, piHead);
-        free_parse_info(piHead);
-        free(piHead->parse_key);
-        free(piHead);
+        HASH_DEL(arrayParseMapHeader, piTail);
+        free_parse_info(piTail);
+        free(piTail->parse_key);
+        free(piTail);
         piHead = piTail = NULL;
         return;
     }
@@ -39,9 +41,10 @@ void delete_lru_pi(void) {
     node->prev->next = NULL;
     piTail = node->prev;
     HASH_DEL(arrayParseMapHeader, node);
-    free_parse_info(piHead);
+    free_parse_info(node);
     free(node->parse_key);
     free(node);
+    pi_delete_count++;
 }
 
 void free_parse_info(struct ARRAY_PARSE_LIST *node) {
@@ -49,7 +52,6 @@ void free_parse_info(struct ARRAY_PARSE_LIST *node) {
     if (node->head == NULL) return;
     for (struct ARRAY_PARSE_INFO * ptr = node->head; ptr != NULL; ptr = nextPtr) {
         nextPtr = ptr->next;
-        free(ptr->strVal);
         free(ptr);
     }
 }
@@ -58,6 +60,16 @@ void delete_parse_info(char *key) {
     for(struct ARRAY_PARSE_LIST * node = piHead; node != NULL; ) {
         struct ARRAY_PARSE_LIST *nextNode = node->next;
         if (strncmp(key, node->parse_key, strlen(key)) == 0) {
+            if(node->prev != NULL)
+                node->prev->next = node->next;
+            else
+                piHead = node->next;
+
+            if (node->next != NULL)
+                node->next->prev = node->prev;
+            else
+                piTail = node->prev;
+
             free_parse_info(node);
             free(node->parse_key);
             free(node);
@@ -71,6 +83,7 @@ struct ARRAY_PARSE_INFO *search_the_parse_info(char *parse_key, int targetIndex)
     struct ARRAY_PARSE_INFO *result;
 
     HASH_FIND_STR(arrayParseMapHeader, parse_key, ptr);
+    pi_get_count++;
 
     if (ptr == NULL || ptr->head == NULL || ptr->tail == NULL) {
         return NULL;
@@ -111,6 +124,7 @@ struct ARRAY_PARSE_INFO *search_the_parse_info(char *parse_key, int targetIndex)
             result = node;
         }
     }
+    pi_hit_count++;
     return result;
 }
 
@@ -118,7 +132,9 @@ void insert_parse_info(char *parseKey, int pathIndex, struct ARRAY_PARSE_INFO *i
     struct ARRAY_PARSE_LIST *mapPtr;
     if (saveInfo == NULL)
         return;
-
+    if (parseInfoMaxSize == 0) {
+        return;
+    }
     saveInfo->pathIndex = pathIndex;
 
     HASH_FIND_STR(arrayParseMapHeader, parseKey, mapPtr);
@@ -351,7 +367,7 @@ LABEL:
         appendStringInfo(pathPrev, "%d", attNum);
         appendStringInfo(path, "%d->%s", attNum, name);
     } else {
-        appendBinaryStringInfo(pathPrev, path->data + pathPrev->len, path->len - pathPrev->len);
+        appendStringInfo(pathPrev, path->data + pathPrev->len, path->len - pathPrev->len);
         appendStringInfo(path, "->%s", name);
     }
 
@@ -387,4 +403,11 @@ extern void free_primary_key(void) {
     pfree(primaryKey->data);
     pfree(primaryKey);
     primaryKey = NULL;
+}
+
+extern void print_pi_hit_rate(void) {
+    ereport(LOG,
+            (errmsg("pi_get_count: %u, hit_count: %u, delete_count: %u",
+                    pi_get_count, pi_hit_count,
+                    pi_delete_count)));
 }

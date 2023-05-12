@@ -10,11 +10,10 @@
 struct InvalidMessage {
     char *key; // 要被清除的缓存的 primaryKey
     enum KeyType keyType; // 缓存的路径类型
-    char *parseKey;
 };
 
 // 发送函数，向消息队列中写入一条无效消息
-void sendInvalidMessage(char *key, enum KeyType keyType, char *parseKey);
+void sendInvalidMessage(char *key, enum KeyType keyType);
 
 // 接收函数，从消息队列中读取未处理的消息并删除对应的缓存
-void receiveInvalidMessage();
+void receiveInvalidMessage(void);

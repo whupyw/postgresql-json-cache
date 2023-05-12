@@ -1342,7 +1342,7 @@ get_worker_with_cache(text *json, char **tpath, int *ipath, int npath, bool norm
         lex->lex_level = parseInfo->lex_level;
         lex->line_number = parseInfo->line_number;
         lex->line_start = lex->input + parseInfo->line_start;
-        appendStringInfo(lex->strval, parseInfo->strVal);
+//        appendStringInfo(lex->strval, parseInfo->strVal);
         // 扫描的下标直接从最近的开始
         state->array_cur_index[0] = parseInfo->array_cur_index;
     }
@@ -1671,8 +1671,8 @@ static void get_array_element_end_with_cache(void *state, bool isnull) {
             saveInfo->lex_level = lex->lex_level;
             saveInfo->line_number = lex->line_number;
             saveInfo->line_start = lex->line_start - lex->input;
-            saveInfo->strVal = (char *) malloc(strlen(lex->strval->data)+1);
-            strcpy(saveInfo->strVal, lex->strval->data);
+//            saveInfo->strVal = (char *) malloc(strlen(lex->strval->data)+1);
+//            strcpy(saveInfo->strVal, lex->strval->data);
             saveInfo->array_cur_index = _state->array_cur_index[0];
             saveInfo->result_start = start - lex->input;
             saveParseInfo(saveInfo);
