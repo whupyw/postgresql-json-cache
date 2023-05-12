@@ -42,6 +42,3 @@ lib*.pc
 /Debug/
 /Release/
 /tmp_install/
-/include/server
-/share
-/include

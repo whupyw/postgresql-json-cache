@@ -10,7 +10,7 @@ struct JSON_ARC_LIST *b2 = NULL;
 
 struct JSON_CACHE_PTR *json_map_head = NULL;
 
-const double t_b_total = 1000; // c 缓存容量
+const double t_b_total = 16; // c 缓存容量
 double t1_cap = 0.0; // p
 
 uint json_hit_count = 0, json_get_count = 0, json_phantom_hit_count = 0, json_delete_count = 0;
@@ -214,7 +214,7 @@ extern void delete_json(char *key, enum KeyType keyType) {
 
 extern void print_json_hit_rate(void) {
     ereport(LOG,
-            (errmsg("get_count: %u, hit_count: %u, phantom_hit_count: %u, delete_count: %u",
+            (errmsg("json_get_count: %u, hit_count: %u, phantom_hit_count: %u, delete_count: %u",
                     json_get_count, json_hit_count,
                     json_phantom_hit_count, json_delete_count)));
 }

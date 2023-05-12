@@ -65,6 +65,8 @@
 #include "utils/rls.h"
 #include "utils/ruleutils.h"
 #include "utils/snapmgr.h"
+#include "utils/arc_json.h"
+#include "utils/json_cache_utils.h"
 
 
 /* Hooks for plugins to get control in ExecutorStart/Run/Finish/End */
@@ -367,6 +369,8 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 					direction,
 					dest,
 					execute_once);
+//        print_json_hit_rate();
+//        print_pi_hit_rate();
 	}
 
 	/*
